@@ -4,7 +4,7 @@ import { $, S, app, BY, inMove, cur } from './state.js';
 import { toast, fail, ask, render, chooseDuration, takeDialogCallbacks } from './ui.js';
 import { place, unplace, submit, doSwap, pass, undo, startSwap, cancelSwapOrMove, newGame } from './game.js';
 import { openJudge, onJudgeClick, abortJudge } from './judge.js';
-import { playBGM, stopBGM } from './audio.js';
+import { playBGM, stopBGM, playSFX } from './audio.js';
 
 function onSquare(r, c) {
   if (S.ended || S.swap) return;
@@ -12,7 +12,7 @@ function onSquare(r, c) {
   if (t) {
     const e = inMove(t);
     if (!e) return fail('هذه القطعة مثبتة ولا يمكن تحريكها.');
-    if (S.pick === t) { unplace(e); S.pick = null; } else S.pick = t;
+    if (S.pick === t) { unplace(e); S.pick = null; } else { S.pick = t; playSFX('tile-select'); }
     return render();
   }
   if (S.pick) place(S.pick, r, c); else toast('اختر قطعة من رفّك.', true);
@@ -21,8 +21,16 @@ function onSlot(p, i) {
   if (S.ended) return;
   if (p !== S.cur) return fail('هذا رفّ الخصم — ليس دورك الآن.');
   const t = cur().rack[i];
-  if (S.swap) { if (!t) return; S.sel.has(t) ? S.sel.delete(t) : S.sel.add(t); return render(); }
-  if (t) S.pick = S.pick === t ? null : t;
+  if (S.swap) {
+    if (!t) return;
+    if (S.sel.has(t)) { S.sel.delete(t); playSFX('tile-cancel'); }
+    else { S.sel.add(t); playSFX('tile-select'); }
+    return render();
+  }
+  if (t) {
+    if (S.pick === t) S.pick = null;
+    else { S.pick = t; playSFX('tile-select'); }
+  }
   else if (S.pick && inMove(S.pick)) { unplace(inMove(S.pick)); S.pick = null; }
   render();
 }
