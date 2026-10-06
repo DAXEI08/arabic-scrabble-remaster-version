@@ -3,7 +3,7 @@ import { MAX_IDLE, MIN_BAG_SWAP, NAMES, REASONS } from './config.js';
 import { $, S, app, shuffle, inMove, cur, refill, pushHist, snapshot, restore, createState } from './state.js';
 import { analyze, scoreWords } from './scoring.js';
 import { toast, fail, ask, render, tickUI, chooseDuration, openBlankPicker } from './ui.js';
-import { stopBGM } from './audio.js';
+import { stopBGM, playSFX } from './audio.js';
 
 // ---------- Clock (timestamp based; driven by a single interval in main.js) ----------
 export function tick() {
@@ -33,19 +33,25 @@ export function place(t, r, c) {
     cur().rack[slot] = null; e = {t, r, c, slot}; S.move.push(e);
   }
   S.board[r][c] = t; S.land = t; S.pick = null;
+  playSFX('tile-place');
   // A blank tile must be given a letter before the move can continue (clock paused meanwhile).
   if (t.blank && !t.as) { S.pending = e; S.paused = true; render(); openBlankPicker(); return true; }
   render(); return true;
 }
-export function unplace(e) {
+export function unplace(e, silent=false) {
   S.board[e.r][e.c] = null;
   if (e.t.blank) e.t.as = null;
   const rack = cur().rack;
   const i = rack[e.slot] ? rack.indexOf(null) : e.slot;
   rack[i] = e.t;
   S.move = S.move.filter(x => x !== e);
+  if (!silent) playSFX('tile-cancel');
 }
-export function cancelMove() { [...S.move].forEach(unplace); S.pick = null; }
+export function cancelMove() {
+  if (S.move.length) playSFX('tile-cancel');
+  [...S.move].forEach(e => unplace(e, true));
+  S.pick = null;
+}
 
 // ---------- Actions ----------
 export function submit() {
@@ -53,12 +59,15 @@ export function submit() {
   const a = analyze();
   if (a.err) return fail(a.err);
   const r = scoreWords(a.words, a.isNew, S.move.length), pts = r.total, p = cur();
+  playSFX('word-submit');
   S.undo = snapshot();
   pushHist({p: S.cur, type: 'move', words: r.list, total: pts, bingo: r.bingo});
   p.score += pts; S.move = []; S.pick = null; S.idle = 0; S.pop = S.cur;
   refill(p);
   toast(`${NAMES[S.cur]}: +${pts} نقطة`, false);
-  if (!p.rack.some(Boolean)) return endGame('rack');
+  const finished = !p.rack.some(Boolean);
+  if (!finished) setTimeout(() => playSFX('score'), 100);
+  if (finished) return endGame('rack');
   nextTurn(true);
 }
 export function nextTurn(scored) {
@@ -71,12 +80,14 @@ export function undo() {
   if (!u || S.ended || S.swap || S.move.length) return;
   tick(); if (S.ended) return;
   restore(u); S.hist.pop(); S.hv++;
+  playSFX('undo');
   toast('تم التراجع عن الحركة الأخيرة', false); render();
 }
 export function pass() {
   if (S.ended || S.swap || S.move.length) return;
   S.undo = null; S.idle++; pushHist({p: S.cur, type: 'pass'});
   if (S.idle >= MAX_IDLE) return endGame('idle');
+  playSFX('pass');
   toast(`${NAMES[S.cur]} مرّر الدور`, false); nextTurn();
 }
 export function startSwap() {
@@ -96,6 +107,7 @@ export function doSwap() {
   idx.forEach((i, k) => { rack[i] = drawn[k]; });
   S.bag.push(...old); shuffle(S.bag);
   S.swap = false; S.sel.clear(); S.undo = null; S.idle++; pushHist({p: S.cur, type: 'swap', cnt: idx.length});
+  playSFX('tile-swap');
   if (S.idle >= MAX_IDLE) return endGame('idle');
   toast(`تم تبديل ${idx.length} قطع`, false); nextTurn();
 }
@@ -103,6 +115,7 @@ export function endGame(reason) {
   if (S.ended) return;
   S.ended = true;
   stopBGM();
+  playSFX('game-end');
   if (S.pending) { S.pending = null; $('#bd').close(); }
   if (app.judge) { app.judge = null; $('#jd').close(); }
   cancelMove(); S.swap = false; S.sel.clear(); S.pick = null;
