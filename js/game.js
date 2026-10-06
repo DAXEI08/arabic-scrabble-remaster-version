@@ -3,6 +3,7 @@ import { MAX_IDLE, MIN_BAG_SWAP, NAMES, REASONS } from './config.js';
 import { $, S, app, shuffle, inMove, cur, refill, pushHist, snapshot, restore, createState } from './state.js';
 import { analyze, scoreWords } from './scoring.js';
 import { toast, fail, ask, render, tickUI, chooseDuration, openBlankPicker } from './ui.js';
+import { stopBGM } from './audio.js';
 
 // ---------- Clock (timestamp based; driven by a single interval in main.js) ----------
 export function tick() {
@@ -101,6 +102,7 @@ export function doSwap() {
 export function endGame(reason) {
   if (S.ended) return;
   S.ended = true;
+  stopBGM();
   if (S.pending) { S.pending = null; $('#bd').close(); }
   if (app.judge) { app.judge = null; $('#jd').close(); }
   cancelMove(); S.swap = false; S.sel.clear(); S.pick = null;
