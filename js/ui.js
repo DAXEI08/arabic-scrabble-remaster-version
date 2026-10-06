@@ -1,6 +1,7 @@
 // DOM rendering, toasts and dialogs. Reads state; never mutates game rules.
 import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL, NAMES, ALPHA } from './config.js';
 import { $, S, app, fmt, esc, inMove, cur } from './state.js';
+import { playSFX } from './audio.js';
 
 let cells = [], toastTimer = 0, dlgCb = null, dlgCancel = null;
 const hs = {id: -1, v: -1};   // last rendered history (game id / version)
@@ -21,6 +22,7 @@ export function toast(msg, ok) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.textContent = ''; el.className = ''; }, TOAST_MS);
 }
 export function fail(msg) {
+  playSFX('invalid');
   toast(msg, true);
   const b = $('#board'); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
 }
