@@ -52,6 +52,14 @@ function saveMute() {
   catch { /* storage unavailable */ }
 }
 
+function stopAllSFX() {
+  for (const pool of clips.values())
+    for (const clip of pool) {
+      clip.pause();
+      clip.currentTime = 0;
+    }
+}
+
 function updateSoundButton() {
   const b = document.getElementById('bSound');
   if (!b) return;
@@ -151,9 +159,11 @@ export function toggleMute() {
   saveMute();
   updateSoundButton();
 
-  if (bgm) {
-    if (muted) bgm.pause();
-    else if (active) tryPlayBGM();
+  if (muted) {
+    stopAllSFX();
+    if (bgm) bgm.pause();
+  } else if (bgm && active) {
+    tryPlayBGM();
   }
 }
 
