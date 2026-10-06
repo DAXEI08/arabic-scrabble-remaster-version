@@ -143,6 +143,9 @@ h1{font-size:.95rem;letter-spacing:.06em;text-align:center}header{text-align:cen
 }
 /* Phones turned sideways: smaller racks, clocks and control buttons (both landscape layouts) */
 @media(orientation:landscape) and (max-height:559px){
+/* Keep audio control clear of the compact landscape title and board. */
+header{min-height:42px;padding-inline:46px}
+.audioBtn{width:38px;min-height:36px;top:50%;inset-inline-end:2px;transform:translateY(-50%);font-size:1rem;z-index:5}
 .side,.ctrls,.players{gap:5px}
 #toast{min-height:24px;font-size:.85rem;padding:0 8px}
 .panel{padding:5px 8px}.phead{margin-bottom:3px}
