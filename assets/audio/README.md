@@ -1,0 +1,37 @@
+# Audio assets
+
+Place the optional audio files in this folder. The game continues to work when any file is missing.
+
+## Background music
+
+`bgm.mp3`
+
+- Loops automatically during gameplay.
+- Restarts from 00:00 for every new game.
+- Default volume: 35%.
+
+## Sound effects
+
+Add these files to enable the corresponding effects:
+
+`tile-select.mp3` — selecting a tile  
+`tile-place.mp3` — placing a tile on the board  
+`tile-cancel.mp3` — removing/cancelling a placed or selected tile  
+`word-submit.mp3` — submitting a valid move  
+`invalid.mp3` — invalid action or rejected input  
+`score.mp3` — successful scoring feedback  
+`tile-swap.mp3` — swapping tiles  
+`pass.mp3` — passing a turn  
+`undo.mp3` — undoing the last move  
+`game-end.mp3` — game finished
+
+Optional result sounds are also supported:
+
+`victory.mp3` — victory cue  
+`defeat.mp3` — defeat cue
+
+## Recommended feel
+
+Use short, clean effects rather than loud arcade-style sounds. Tile sounds work best with a wooden/plastic board character, while score and submit sounds should be soft chimes.
+
+The in-game speaker button mutes/unmutes all audio and remembers the choice on the same device.
