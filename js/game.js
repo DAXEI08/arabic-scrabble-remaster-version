@@ -96,7 +96,7 @@ export function startSwap() {
 }
 export function cancelSwapOrMove() {
   if (S.ended) return;
-  if (S.swap) { S.swap = false; S.sel.clear(); } else cancelMove();
+  if (S.swap) { playSFX('tile-cancel'); S.swap = false; S.sel.clear(); } else cancelMove();
   render();
 }
 export function doSwap() {
@@ -116,6 +116,8 @@ export function endGame(reason) {
   S.ended = true;
   stopBGM();
   playSFX('game-end');
+  if (reason === 'rack') setTimeout(() => playSFX('victory'), 180);
+  else if (reason === 'time') setTimeout(() => playSFX('defeat'), 180);
   if (S.pending) { S.pending = null; $('#bd').close(); }
   if (app.judge) { app.judge = null; $('#jd').close(); }
   cancelMove(); S.swap = false; S.sel.clear(); S.pick = null;
