@@ -5,28 +5,35 @@
 // safely be used by main.js, input.js and game.js without circular imports.
 
 let bgm = null;
+let active = false;
 let retryBound = false;
+
+function tryPlay() {
+  if (!bgm || !active || document.hidden) return;
+
+  const p = bgm.play();
+  if (p && typeof p.catch === 'function') {
+    p.catch(() => {
+      // Browser autoplay restrictions are handled by the next user interaction.
+    });
+  }
+}
 
 function bindPlaybackRetry() {
   if (retryBound) return;
   retryBound = true;
 
   const retry = () => {
-    if (!bgm) return;
-    if (document.hidden) return;
-    // Only retry when playback has not started.
-    if (bgm.paused) {
-      const p = bgm.play();
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    }
+    if (bgm && active && bgm.paused) tryPlay();
   };
 
-  // Covers browsers that block the first play() call.
+  // If the first play() is blocked, resume after a real user interaction.
   document.addEventListener('pointerdown', retry, { passive: true });
   document.addEventListener('keydown', retry);
   document.addEventListener('touchstart', retry, { passive: true });
+
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !bgm.ended) retry();
+    if (!document.hidden && active && bgm && bgm.paused) tryPlay();
   });
 }
 
@@ -47,28 +54,22 @@ export function initAudio() {
 export function playBGM(reset = false) {
   if (!bgm) return;
 
+  active = true;
+
   if (reset) {
-    // Pause first so a restart can never overlap the previous playback.
+    // Reset before every new game so the music always starts from 00:00.
     bgm.pause();
     bgm.currentTime = 0;
   }
 
-  const p = bgm.play();
-  if (p && typeof p.catch === 'function') {
-    p.catch(() => {
-      // Autoplay restrictions are handled by the interaction listeners above.
-    });
-  }
+  tryPlay();
 }
 
 export function stopBGM() {
+  active = false;
+
   if (!bgm) return;
 
   bgm.pause();
   bgm.currentTime = 0;
-}
-
-export function pauseBGM() {
-  if (!bgm) return;
-  bgm.pause();
 }
