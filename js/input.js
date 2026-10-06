@@ -42,7 +42,7 @@ function bindBoardInput() {
   });
   document.addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sq,.tile')) { e.preventDefault(); (e.target.closest('.slot') || e.target.closest('.sq') || e.target).click(); }
-    if (e.key === 'Escape' && S.pick) { S.pick = null; render(); }
+    if (e.key === 'Escape' && S.pick) { S.pick = null; playSFX('tile-cancel'); render(); }
   });
   document.addEventListener('dragstart', e => {
     const el = e.target.closest && e.target.closest('.tile'), t = el && BY[el.dataset.id];
