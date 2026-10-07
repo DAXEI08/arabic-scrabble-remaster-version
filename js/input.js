@@ -4,7 +4,7 @@ import { $, S, app, BY, inMove, cur } from './state.js';
 import { toast, fail, ask, render, chooseDuration, takeDialogCallbacks } from './ui.js';
 import { place, unplace, submit, doSwap, pass, undo, startSwap, cancelSwapOrMove, newGame } from './game.js';
 import { openJudge, onJudgeClick, abortJudge } from './judge.js';
-import { playBGM, stopBGM, playSFX } from './audio.js';
+import { playBGM, playSFX } from './audio.js';
 
 function onSquare(r, c) {
   if (S.ended || S.swap) return;
