@@ -35,6 +35,8 @@ let initialized = false;
 let retryBound = false;
 let muted = DEFAULT_PREFS.muted;
 let prefs = {...DEFAULT_PREFS};
+let ducked = false;
+let fadeToken = 0;
 
 const clips = new Map();
 const lastPlayed = new Map();
@@ -72,6 +74,32 @@ function allowedMusic() {
 
 function allowedSfx() {
   return prefs.sfx && !prefs.muted;
+}
+
+function musicTarget() {
+  return allowedMusic() ? prefs.musicVolume * (ducked ? 0.18 : 1) : 0;
+}
+
+function fadeBGM(target, duration = 420, after = null) {
+  if (!bgm) { after?.(); return; }
+  const token = ++fadeToken;
+  const start = bgm.volume;
+  const end = clamp01(target, 0);
+  if (duration <= 0 || Math.abs(end - start) < 0.001) {
+    bgm.volume = end;
+    after?.();
+    return;
+  }
+  const started = performance.now();
+  const step = now => {
+    if (token !== fadeToken || !bgm) return;
+    const progress = Math.min(1, (now - started) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    bgm.volume = start + (end - start) * eased;
+    if (progress < 1) requestAnimationFrame(step);
+    else after?.();
+  };
+  requestAnimationFrame(step);
 }
 
 function stopAllSFX() {
@@ -197,6 +225,7 @@ function bindSettingsControls() {
   if (open && dialog) {
     open.onclick = () => {
       updateSettingsUI();
+      setMusicDucked(true);
       dialog.returnValue = '';
       dialog.showModal();
     };
@@ -221,7 +250,10 @@ function bindSettingsControls() {
   }
 
   if (dialog) {
-    dialog.addEventListener('close', updateSettingsUI);
+    dialog.addEventListener('close', () => {
+      setMusicDucked(false);
+      updateSettingsUI();
+    });
   }
 }
 
@@ -237,7 +269,7 @@ export function initAudio() {
     bgm.src = BGM_SRC;
     bgm.loop = true;
     bgm.preload = 'auto';
-    bgm.volume = prefs.musicVolume;
+    bgm.volume = 0;
     bgm.setAttribute('aria-hidden', 'true');
   }
 
@@ -259,16 +291,22 @@ export function playBGM(reset = false) {
     bgm.currentTime = 0;
   }
 
-  bgm.volume = prefs.musicVolume;
+  if (reset) bgm.volume = 0;
   tryPlayBGM();
+  fadeBGM(musicTarget(), reset ? 900 : 420);
 }
 
 export function stopBGM() {
   active = false;
   if (!bgm) return;
 
-  bgm.pause();
-  bgm.currentTime = 0;
+  const token = ++fadeToken;
+  fadeBGM(0, 520, () => {
+    if (token !== fadeToken || active || !bgm) return;
+    bgm.pause();
+    bgm.currentTime = 0;
+    bgm.volume = 0;
+  });
 }
 
 export function toggleMute() {
@@ -280,10 +318,12 @@ export function toggleMute() {
 
   if (bgm) {
     if (allowedMusic() && active) {
-      bgm.volume = prefs.musicVolume;
       tryPlayBGM();
+      fadeBGM(musicTarget(), 360);
     } else {
-      bgm.pause();
+      fadeBGM(0, 260, () => {
+        if (!allowedMusic() || !active) bgm.pause();
+      });
     }
   }
 
@@ -297,10 +337,12 @@ export function setMusicEnabled(on) {
 
   if (bgm) {
     if (allowedMusic() && active) {
-      bgm.volume = prefs.musicVolume;
       tryPlayBGM();
+      fadeBGM(musicTarget(), 360);
     } else if (!prefs.music || prefs.muted) {
-      bgm.pause();
+      fadeBGM(0, 260, () => {
+        if (!allowedMusic() || !active) bgm.pause();
+      });
     }
   }
 
@@ -330,7 +372,7 @@ export function setVolume(kind, value) {
 
   if (kind === 'music') {
     prefs.musicVolume = volume;
-    if (bgm) bgm.volume = volume;
+    if (bgm) fadeBGM(musicTarget(), 160);
   } else {
     prefs.sfxVolume = volume;
     for (const [name, pool] of clips) {
@@ -341,6 +383,11 @@ export function setVolume(kind, value) {
 
   savePrefs();
   updateSettingsUI();
+}
+
+export function setMusicDucked(on) {
+  ducked = Boolean(on);
+  if (bgm && active && allowedMusic()) fadeBGM(musicTarget(), ducked ? 180 : 360);
 }
 
 export function getAudioSettings() {
