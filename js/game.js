@@ -3,7 +3,7 @@ import { MAX_IDLE, MIN_BAG_SWAP, NAMES, REASONS } from './config.js';
 import { $, S, app, shuffle, inMove, cur, refill, pushHist, snapshot, restore, createState } from './state.js';
 import { analyze, scoreWords } from './scoring.js';
 import { toast, fail, ask, render, tickUI, chooseDuration, openBlankPicker } from './ui.js';
-import { stopBGM, playSFX, playDelayedSFX } from './audio.js';
+import { stopBGM, playSFX, prepareForNewGame } from './audio.js';
 
 // ---------- Clock (timestamp based; driven by a single interval in main.js) ----------
 export function tick() {
@@ -116,8 +116,6 @@ export function endGame(reason) {
   S.ended = true;
   stopBGM();
   playSFX('game-end');
-  if (reason === 'rack') playDelayedSFX('victory', 180);
-  else if (reason === 'time') playDelayedSFX('defeat', 180);
   if (S.pending) { S.pending = null; $('#bd').close(); }
   if (app.judge) { app.judge = null; $('#jd').close(); }
   cancelMove(); S.swap = false; S.sel.clear(); S.pick = null;
@@ -129,5 +127,5 @@ export function endGame(reason) {
   const [a, b] = [S.players[0].score, S.players[1].score];
   const win = a === b ? 'تعادل!' : `الفائز: ${NAMES[a > b ? 0 : 1]}`;
   render();
-  ask('انتهت اللعبة', `${REASONS[reason]}\n\n${lines.join('\n')}\n\n${win}`, 'لعبة جديدة', chooseDuration);
+  ask('انتهت اللعبة', `${REASONS[reason]}\n\n${lines.join('\n')}\n\n${win}`, 'لعبة جديدة', () => {\n    prepareForNewGame();\n    chooseDuration();\n  });
 }
