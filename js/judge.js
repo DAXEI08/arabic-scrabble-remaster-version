@@ -4,16 +4,17 @@ import { PENALTY, JUDGES_KEY, NAMES } from './config.js';
 import { $, S, app, esc, cur, restore } from './state.js';
 import { toast, render, chips } from './ui.js';
 import { tick, nextTurn } from './game.js';
+import { setMusicDucked } from './audio.js';
 
 export function openJudge() {
   const e = S.hist[S.hist.length - 1];
   if (S.ended || S.swap || S.move.length || !S.undo || !e || e.type !== 'move' || e.st) return;
   app.judge = {e, stage: 0, names: [], votes: [], i: 0, ok: false, tally: ''};
-  S.paused = true; renderJudge(); $('#jd').showModal();
+  S.paused = true; setMusicDucked(true); renderJudge(); $('#jd').showModal();
 }
 // Dialog closed without applying a verdict (Esc / cancel): drop the session and resume the clock.
 export function abortJudge() {
-  if (app.judge) { app.judge = null; S.paused = false; S.last = performance.now(); }
+  if (app.judge) { app.judge = null; setMusicDucked(false); S.paused = false; S.last = performance.now(); }
 }
 function renderJudge() {
   const J = app.judge, e = J.e, B = $('#jB'), T = $('#jT');
@@ -57,7 +58,7 @@ export function onJudgeClick(ev) {
 function applyVerdict() {
   const J = app.judge, e = J.e, ok = J.ok, u = S.undo;
   e.vote = J.tally; e.by = J.names.slice(0, J.votes.length).join('، '); e.st = ok ? 'ok' : 'void';
-  app.judge = null; $('#jd').close(); S.paused = false; S.last = performance.now(); S.hv++;
+  app.judge = null; setMusicDucked(false); $('#jd').close(); S.paused = false; S.last = performance.now(); S.hv++;
   if (ok) {
     const ch = cur(); e.pen = Math.min(PENALTY, ch.score); ch.score -= e.pen; S.undo = null; S.pop = S.cur;
     toast(`أقرّ الحكّام الحركة — غرامة ${e.pen} على ${NAMES[S.cur]}`, false); return render();
