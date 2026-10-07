@@ -1,7 +1,7 @@
 // DOM rendering, toasts and dialogs. Reads state; never mutates game rules.
 import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL, NAMES, ALPHA } from './config.js';
 import { $, S, app, fmt, esc, inMove, cur } from './state.js';
-import { playSFX } from './audio.js';
+import { playSFX, setMusicDucked } from './audio.js';
 
 let cells = [], toastTimer = 0, dlgCb = null, dlgCancel = null;
 const hs = {id: -1, v: -1};   // last rendered history (game id / version)
@@ -32,17 +32,18 @@ export function ask(title, msg, okLabel, fn, onCancel = null, okCls = 'btn dange
   for (const [label, val, cls] of [[okLabel, 'ok', okCls], [onCancel ? 'رجوع' : 'إغلاق', '', 'btn']]) {
     const b = document.createElement('button'); b.className = cls; b.value = val; b.textContent = label; f.append(b);
   }
-  S.paused = true; dlgCb = fn; dlgCancel = onCancel; $('#dlg').returnValue = ''; $('#dlg').showModal();
+  S.paused = true; dlgCb = fn; dlgCancel = onCancel; setMusicDucked(true); $('#dlg').returnValue = ''; $('#dlg').showModal();
 }
 // Called by the dialog 'close' listener: returns and clears the pending callbacks.
 export function takeDialogCallbacks() { const r = {ok: dlgCb, cancel: dlgCancel}; dlgCb = dlgCancel = null; return r; }
 
 export function chooseDuration() {
   if (S.board) S.paused = true;
+  setMusicDucked(true);
   $('#sf').innerHTML = DURATIONS.map(m => `<button class="btn" value="${m}">${m} دقيقة</button>`).join('');
   $('#sd').returnValue = ''; $('#sd').showModal();
 }
-export function openBlankPicker() { $('#bd').returnValue = ''; $('#bd').showModal(); }
+export function openBlankPicker() { setMusicDucked(true); $('#bd').returnValue = ''; $('#bd').showModal(); }
 
 // ---------- Rendering (DOM is only touched when a cell/rack/list actually changed) ----------
 const sqHTML = k => {
