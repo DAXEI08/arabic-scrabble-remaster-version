@@ -19,8 +19,11 @@ body{font-family:var(--font);color:var(--ivory);min-height:100dvh;padding:max(8p
 background:radial-gradient(ellipse at top,#4a2d1b,#24150c 70%) fixed;font-size:18px}
 .app{max-width:760px;margin:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 header{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}
-.audioBtn{position:absolute;inset-inline-end:0;top:0;width:44px;min-height:40px;padding:0;font-size:1.1rem}
+.audioControls{position:absolute;inset-inline-end:0;top:0;display:flex;gap:5px;align-items:center}
+.audioBtn,.audioSettingsBtn{width:44px;min-height:40px;padding:0;font-size:1.1rem}
+.audioSettingsBtn{font-size:1rem}
 .audioBtn.muted{opacity:.65}
+.audioSettingsBtn{opacity:.9}
 h1{margin:0;font-size:2rem;color:var(--gold);text-shadow:0 2px 4px #0008;direction:ltr;text-transform:uppercase;letter-spacing:.12em;line-height:1.1}
 .by{opacity:.55;font-size:.85rem}.bag{margin-top:8px;text-align:center;font-size:1rem;opacity:.9;min-height:1.2em}
 .boardWrap{min-width:0}
@@ -95,13 +98,23 @@ dialog form{display:flex;gap:8px}dialog form .btn{flex:1}
 #bf{display:grid;grid-template-columns:repeat(6,1fr)}#bf .btn{font-size:1.4rem;min-height:48px;padding:0}#bf{max-height:60dvh;overflow:auto}
 #jB{display:grid;gap:10px;max-height:70dvh;overflow:auto}#jB p{margin:0}
 button,input,textarea,select{font-family:inherit}
+.audioPanel{display:grid;gap:12px}
+.audioMaster{display:flex}
+.audioMaster .btn{width:100%;min-height:44px}
+.audioMaster .btn.muted,.audioToggles .btn.isOff{opacity:.62}
+.audioRow{display:grid;gap:6px;padding:10px 12px;border-radius:10px;background:#0004;border:1px solid #b8893f44}
+.audioRowHead{display:flex;align-items:center;gap:8px;font-weight:700}
+.audioRowHead output{margin-inline-start:auto;color:var(--gold);font-variant-numeric:tabular-nums;direction:ltr}
+.audioRange{width:100%;accent-color:var(--gold);direction:ltr;cursor:pointer}
+.audioToggles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.audioToggles .btn{min-height:44px;font-size:.95rem}
 #jB input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #d4af3799;background:#1a0f08;color:var(--ivory);width:100%}
 .vrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* Mobile portrait: reserve a dedicated area for the audio control so it never overlaps the title. */
 @media (max-width:719px) and (orientation:portrait){
   header{
     min-height:56px;
-    padding-inline:52px;
+    padding-inline:96px;
     justify-content:center;
   }
   h1{
@@ -117,7 +130,6 @@ button,input,textarea,select{font-family:inherit}
     width:40px;
     min-height:40px;
     top:50%;
-    inset-inline-end:4px;
     transform:translateY(-50%);
     font-size:1rem;
     z-index:5;
@@ -127,9 +139,10 @@ button,input,textarea,select{font-family:inherit}
 
 /* Extra-small phones: tighter header spacing while preserving a comfortable audio hit area. */
 @media (max-width:360px) and (orientation:portrait){
-  header{padding-inline:48px;min-height:52px}
+  header{padding-inline:88px;min-height:52px}
   h1{font-size:clamp(.92rem,5.4vw,1.15rem);letter-spacing:.04em}
-  .audioBtn{width:38px;min-height:38px;inset-inline-end:2px}
+  .audioControls{inset-inline-end:2px}
+  .audioBtn,.audioSettingsBtn{width:38px;min-height:38px;font-size:.95rem}
 }
 
 @media(max-width:420px){body{font-size:16px;padding-inline:4px}.btn{font-size:.9rem}}
@@ -179,8 +192,9 @@ h1{font-size:.95rem;letter-spacing:.06em;text-align:center}header{text-align:cen
 /* Phones turned sideways: smaller racks, clocks and control buttons (both landscape layouts) */
 @media(orientation:landscape) and (max-height:559px){
 /* Keep audio control clear of the compact landscape title and board. */
-header{min-height:42px;padding-inline:46px}
-.audioBtn{width:38px;min-height:36px;top:50%;inset-inline-end:2px;transform:translateY(-50%);font-size:1rem;z-index:5}
+header{min-height:42px;padding-inline:88px}
+.audioControls{inset-inline-end:2px}
+.audioBtn,.audioSettingsBtn{width:38px;min-height:36px;top:50%;transform:translateY(-50%);font-size:1rem;z-index:5}
 .side,.ctrls,.players{gap:5px}
 #toast{min-height:24px;font-size:.85rem;padding:0 8px}
 .panel{padding:5px 8px}.phead{margin-bottom:3px}
