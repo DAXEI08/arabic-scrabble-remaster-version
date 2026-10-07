@@ -40,7 +40,9 @@ let retryBound = false;
 let muted = DEFAULT_PREFS.muted;
 let prefs = {...DEFAULT_PREFS};
 let ducked = false;
-let fadeToken = 0;
+let fadeFrame = 0;
+let audioSession = 0;
+const delayedSfxTimers = new Set();
 
 const clips = new Map();
 const lastPlayed = new Map();
@@ -84,26 +86,44 @@ function musicTarget() {
   return allowedMusic() ? prefs.musicVolume * (ducked ? 0.18 : 1) : 0;
 }
 
+function cancelFade() {
+  if (fadeFrame) {
+    cancelAnimationFrame(fadeFrame);
+    fadeFrame = 0;
+  }
+}
+
 function fadeBGM(target, duration = 420, after = null) {
   if (!bgm) { after?.(); return; }
-  const token = ++fadeToken;
+
+  cancelFade();
+
   const start = bgm.volume;
   const end = clamp01(target, 0);
+
   if (duration <= 0 || Math.abs(end - start) < 0.001) {
     bgm.volume = end;
     after?.();
     return;
   }
+
   const started = performance.now();
   const step = now => {
-    if (token !== fadeToken || !bgm) return;
+    fadeFrame = 0;
+    if (!bgm) return;
+
     const progress = Math.min(1, (now - started) / duration);
     const eased = 1 - Math.pow(1 - progress, 3);
     bgm.volume = start + (end - start) * eased;
-    if (progress < 1) requestAnimationFrame(step);
-    else after?.();
+
+    if (progress < 1) {
+      fadeFrame = requestAnimationFrame(step);
+    } else {
+      after?.();
+    }
   };
-  requestAnimationFrame(step);
+
+  fadeFrame = requestAnimationFrame(step);
 }
 
 function stopAllSFX() {
@@ -275,6 +295,55 @@ function bindSettingsControls() {
   }
 }
 
+export function stopAllSFXNow() {
+  stopAllSFX();
+}
+
+function clearDelayedSFX() {
+  for (const timer of delayedSfxTimers) clearTimeout(timer);
+  delayedSfxTimers.clear();
+}
+
+export function playDelayedSFX(name, delayMs = 0) {
+  if (!Number.isFinite(delayMs) || delayMs <= 0) {
+    playSFX(name);
+    return;
+  }
+
+  const session = audioSession;
+  const timer = setTimeout(() => {
+    delayedSfxTimers.delete(timer);
+    if (session === audioSession) playSFX(name);
+  }, delayMs);
+
+  delayedSfxTimers.add(timer);
+}
+
+export function startNewGameAudio() {
+  audioSession++;
+  clearDelayedSFX();
+  stopAllSFX();
+  lastPlayed.clear();
+  ducked = false;
+
+  if (!bgm) {
+    active = true;
+    return;
+  }
+
+  active = true;
+  cancelFade();
+
+  bgm.pause();
+  try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
+  bgm.volume = 0;
+
+  if (allowedMusic()) {
+    tryPlayBGM();
+    fadeBGM(musicTarget(), 900);
+  }
+}
+
 export function initAudio() {
   if (initialized) return;
   initialized = true;
@@ -301,15 +370,20 @@ export function initAudio() {
 }
 
 export function playBGM(reset = false) {
-  if (!bgm) return;
+  if (!bgm) {
+    active = true;
+    return;
+  }
+
   active = true;
 
   if (reset) {
+    cancelFade();
     bgm.pause();
-    bgm.currentTime = 0;
+    try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
+    bgm.volume = 0;
   }
 
-  if (reset) bgm.volume = 0;
   tryPlayBGM();
   fadeBGM(musicTarget(), reset ? 900 : 420);
 }
@@ -321,7 +395,7 @@ export function stopBGM() {
   fadeBGM(0, 520, () => {
     if (active || !bgm) return;
     bgm.pause();
-    bgm.currentTime = 0;
+    try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
     bgm.volume = 0;
   });
 }
