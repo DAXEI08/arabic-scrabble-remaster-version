@@ -11,10 +11,6 @@
 <header>
 <h1>Arabic Scrabble</h1>
 <span class="by">by esbepe</span>
-<div class="audioControls" aria-label="إعدادات الصوت">
-<button class="btn audioBtn" id="bSound" type="button" aria-label="كتم الصوت">🔊</button>
-<button class="btn audioSettingsBtn" id="bAudioSettings" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">⚙</button>
-</div>
 </header>
 <section class="boardWrap">
 <div id="board" class="board" role="grid" aria-label="لوح اللعب"></div>
@@ -31,6 +27,10 @@
 <button class="btn" id="bUndo">تراجع</button>
 <button class="btn danger" id="bNew">لعبة جديدة</button>
 <button class="btn wide" id="bJudge">⚖ تحكيم</button>
+</div>
+<div class="audioDock" aria-label="التحكم بالصوت">
+<button class="btn audioBtn" id="bSound" type="button" aria-label="كتم الصوت">🔊</button>
+<button class="btn audioSettingsBtn" id="bAudioSettings" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">⚙ إعدادات الصوت</button>
 </div>
 </section>
 <aside class="hist" aria-label="سجل الكلمات"><h2>سجل الكلمات</h2><ol class="hl" id="hList"></ol><p class="hbest" id="hBest"></p></aside>
