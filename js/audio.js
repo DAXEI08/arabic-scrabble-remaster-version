@@ -300,9 +300,8 @@ export function stopBGM() {
   active = false;
   if (!bgm) return;
 
-  const token = ++fadeToken;
   fadeBGM(0, 520, () => {
-    if (token !== fadeToken || active || !bgm) return;
+    if (active || !bgm) return;
     bgm.pause();
     bgm.currentTime = 0;
     bgm.volume = 0;
