@@ -19,14 +19,18 @@ const SFX = {
   'tile-place':  {src:'assets/audio/tile-place.mp3',  volume:.45, pool:3, cooldown:50},
   'tile-cancel': {src:'assets/audio/tile-cancel.mp3', volume:.25, pool:2, cooldown:80},
   'word-submit': {src:'assets/audio/word-submit.mp3', volume:.34, pool:2, cooldown:100},
-  'invalid':     {src:'assets/audio/invalid.mp3',     volume:.30, pool:2, cooldown:120},
-  'score':       {src:'assets/audio/score.mp3',       volume:.42, pool:2, cooldown:100},
-  'tile-swap':   {src:'assets/audio/tile-swap.mp3',   volume:.38, pool:2, cooldown:100},
-  'pass':        {src:'assets/audio/pass.mp3',        volume:.27, pool:2, cooldown:120},
-  'undo':        {src:'assets/audio/undo.mp3',        volume:.27, pool:2, cooldown:120},
+  // Several optional dedicated clips may be added later. Until then, fall back
+  // to the closest existing custom MP3 already bundled with the game.
+  'invalid':     {src:'assets/audio/invalid.mp3',     fallback:'assets/audio/tile-cancel.mp3', volume:.30, pool:2, cooldown:120},
+  'score':       {src:'assets/audio/score.mp3',       fallback:'assets/audio/word-submit.mp3', volume:.42, pool:2, cooldown:100},
+  'tile-swap':   {src:'assets/audio/tile-swap.mp3',   fallback:'assets/audio/tile-place.mp3', volume:.38, pool:2, cooldown:100},
+  'pass':        {src:'assets/audio/pass.mp3',        fallback:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
+  'undo':        {src:'assets/audio/undo.mp3',        fallback:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
   'game-end':    {src:'assets/audio/game-end.mp3',    volume:.48, pool:2, cooldown:200},
-  'victory':     {src:'assets/audio/victory.mp3',     volume:.52, pool:1, cooldown:300},
-  'defeat':      {src:'assets/audio/defeat.mp3',      volume:.44, pool:1, cooldown:300}
+  'victory':     {src:'assets/audio/victory.mp3',     fallback:'assets/audio/word-submit.mp3', volume:.52, pool:1, cooldown:300},
+  'defeat':      {src:'assets/audio/defeat.mp3',      fallback:'assets/audio/game-end.mp3', volume:.44, pool:1, cooldown:300},
+  // UI-only feedback uses the existing tile-select MP3, so no new asset is required.
+  'button-click': {src:'assets/audio/tile-select.mp3', volume:.14, pool:2, cooldown:75}
 };
 
 let bgm = null;
@@ -194,7 +198,20 @@ function makePool(name, cfg) {
     const clip = new Audio(cfg.src);
     clip.preload = 'auto';
     clip.volume = cfg.volume * prefs.sfxVolume;
-    clip.addEventListener('error', () => { clip.dataset.broken = '1'; }, {once:true});
+    clip.addEventListener('error', () => {
+      if (cfg.fallback && clip.dataset.fallbackTried !== '1') {
+        clip.dataset.fallbackTried = '1';
+        clip.dataset.broken = '';
+        try {
+          clip.src = cfg.fallback;
+          clip.load();
+        } catch {
+          clip.dataset.broken = '1';
+        }
+      } else {
+        clip.dataset.broken = '1';
+      }
+    });
     pool.push(clip);
   }
 
@@ -224,6 +241,7 @@ function bindSettingsControls() {
 
   if (open && dialog) {
     open.onclick = () => {
+      playSFX('button-click');
       updateSettingsUI();
       setMusicDucked(true);
       dialog.returnValue = '';
