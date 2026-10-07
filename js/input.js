@@ -45,6 +45,8 @@ function bindBoardInput() {
     if (e.key === 'Escape' && S.pick) { S.pick = null; playSFX('tile-cancel'); render(); }
   });
   document.addEventListener('dragstart', e => {
+    // Native HTML drag is unreliable on touchscreens and can swallow the tap/long-press gesture.
+    if (window.matchMedia('(pointer: coarse)').matches) return e.preventDefault();
     const el = e.target.closest && e.target.closest('.tile'), t = el && BY[el.dataset.id];
     if (!t || el.classList.contains('dim') || S.ended || S.swap) return e.preventDefault();
     S.drag = t; S.pick = null; e.dataTransfer.setData('text/plain', el.dataset.id); e.dataTransfer.effectAllowed = 'move';
