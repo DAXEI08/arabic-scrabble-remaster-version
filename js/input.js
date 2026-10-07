@@ -67,11 +67,12 @@ function bindBoardInput() {
 function bindControls() {
   $('#bSubmit').onclick = () => S.swap ? doSwap() : submit();
   $('#bCancel').onclick = cancelSwapOrMove;
-  $('#bSwap').onclick = startSwap;
+  $('#bSwap').onclick = () => { playSFX('button-click'); startSwap(); };
   $('#bPass').onclick = pass;
-  $('#bJudge').onclick = openJudge;
+  $('#bJudge').onclick = () => { playSFX('button-click'); openJudge(); };
   $('#bUndo').onclick = () => { if (S.undo && !S.ended && !S.move.length && !S.swap) ask('تراجع', 'سيُستعاد اللوح والنقاط إلى ما قبل آخر حركة.', 'تراجع', undo); };
   $('#bNew').onclick = () => {
+    playSFX('button-click');
     S.ended ? chooseDuration() : ask('لعبة جديدة', 'سيُفقد التقدّم الحالي.', 'ابدأ', chooseDuration);
   };
 }
