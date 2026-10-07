@@ -34,4 +34,4 @@ Optional result sounds are also supported:
 
 Use short, clean effects rather than loud arcade-style sounds. Tile sounds work best with a wooden/plastic board character, while score and submit sounds should be soft chimes.
 
-The in-game speaker button mutes/unmutes all audio and remembers the choice on the same device.
+The in-game speaker button provides instant mute/unmute. The adjacent audio-settings button opens independent music and SFX volume controls plus per-channel toggles. All audio preferences are saved on the same device.
