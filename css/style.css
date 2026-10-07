@@ -97,7 +97,42 @@ dialog form{display:flex;gap:8px}dialog form .btn{flex:1}
 button,input,textarea,select{font-family:inherit}
 #jB input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #d4af3799;background:#1a0f08;color:var(--ivory);width:100%}
 .vrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-@media(max-width:420px){body{font-size:16px;padding-inline:4px}h1{font-size:1.4rem}.btn{font-size:.9rem}}
+/* Mobile portrait: reserve a dedicated area for the audio control so it never overlaps the title. */
+@media (max-width:719px) and (orientation:portrait){
+  header{
+    min-height:56px;
+    padding-inline:52px;
+    justify-content:center;
+  }
+  h1{
+    width:100%;
+    max-width:100%;
+    font-size:clamp(1rem,5.6vw,1.4rem);
+    letter-spacing:.06em;
+    line-height:1.08;
+    white-space:nowrap;
+  }
+  .by{font-size:.75rem}
+  .audioBtn{
+    width:40px;
+    min-height:40px;
+    top:50%;
+    inset-inline-end:4px;
+    transform:translateY(-50%);
+    font-size:1rem;
+    z-index:5;
+    flex:none;
+  }
+}
+
+/* Extra-small phones: tighter header spacing while preserving a comfortable audio hit area. */
+@media (max-width:360px) and (orientation:portrait){
+  header{padding-inline:48px;min-height:52px}
+  h1{font-size:clamp(.92rem,5.4vw,1.15rem);letter-spacing:.04em}
+  .audioBtn{width:38px;min-height:38px;inset-inline-end:2px}
+}
+
+@media(max-width:420px){body{font-size:16px;padding-inline:4px}.btn{font-size:.9rem}}
 /* Desktop / 16:9: history | board | players+buttons in one screen (phones and portrait tablets keep the single column above) */
 @media(min-width:1000px) and (min-height:560px){
 .app{--A:min(calc(100vw - 16px),1600px);--bo:max(340px,min(calc(100dvh - 125px),calc(100vw - 640px),880px));
