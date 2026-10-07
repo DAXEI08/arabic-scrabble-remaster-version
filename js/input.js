@@ -72,7 +72,6 @@ function bindControls() {
   $('#bJudge').onclick = openJudge;
   $('#bUndo').onclick = () => { if (S.undo && !S.ended && !S.move.length && !S.swap) ask('تراجع', 'سيُستعاد اللوح والنقاط إلى ما قبل آخر حركة.', 'تراجع', undo); };
   $('#bNew').onclick = () => {
-    stopBGM();
     S.ended ? chooseDuration() : ask('لعبة جديدة', 'سيُفقد التقدّم الحالي.', 'ابدأ', chooseDuration);
   };
 }
