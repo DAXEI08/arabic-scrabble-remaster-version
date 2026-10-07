@@ -13,7 +13,7 @@
  unicode-range:U+0000-05FF,U+2000-206F,U+20A0-20CF}
 :root{--wood:#2b1a10;--gold:#d4af37;--ivory:#f6ecd2;--green:#14532d;--burg:#7a2433;
 --font:'ScrabbleMix',serif}
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
 body{font-family:var(--font);color:var(--ivory);min-height:100dvh;padding:max(8px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom));
 background:radial-gradient(ellipse at top,#4a2d1b,#24150c 70%) fixed;font-size:18px}
@@ -41,13 +41,13 @@ h1{margin:0;font-size:2rem;color:var(--gold);text-shadow:0 2px 4px #0008;directi
 padding:1.2%;border-radius:10px;background:linear-gradient(135deg,#6b4428,#4a2c18);border:3px solid #2a170b;box-shadow:0 10px 30px #000a,inset 0 0 0 2px #b8893f55}
 .sq{position:relative;display:grid;place-items:center;min-width:0;min-height:0;border:1px solid #0004;font-size:max(7px,2.1cqw);font-weight:700;color:#fff;line-height:1.05;
 box-shadow:inset 0 1px 0 #fff3,inset 0 -1px 2px #0004;user-select:none;cursor:pointer}
-.sq,.slot,.btn{touch-action:manipulation}
+.sq,.slot,.tile,.btn{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 .sq:focus-visible,.slot:focus-visible,.tile:focus-visible,.btn:focus-visible,#jB input:focus-visible{outline:3px solid var(--gold);outline-offset:1px;z-index:3}
 .k0{background:#b98f58}.k1{background:#6f9db0}.k2{background:#2f6b8a}.k3{background:#b9606b}.k4{background:#8e2a36}.k5{background:#c9a227;color:#3b2a05}
 .k5 .pl{font-size:1.25em;gap:0}
 .pl{display:grid;gap:.1em;text-align:center;pointer-events:none}.pl .m{direction:ltr;unicode-bidi:isolate}
 .sq.has{box-shadow:none}.sq.drop{outline:2px dashed var(--gold)}
-.tile{position:absolute;inset:0;display:grid;place-items:center;border-radius:12%;color:var(--green);font-weight:700;cursor:pointer;
+.tile{position:absolute;inset:0;display:grid;place-items:center;-webkit-user-drag:none;border-radius:12%;color:var(--green);font-weight:700;cursor:pointer;
 background:linear-gradient(145deg,#fcf5de,#e6d4a0);box-shadow:inset 0 1px 0 #fff9,0 2px 3px #0007;transition:transform .15s,box-shadow .15s;touch-action:manipulation}
 .tile b{font-size:var(--lf);line-height:1;font-weight:700}
 .tile i{position:absolute;bottom:3%;left:9%;font-style:normal;font-size:var(--vf);font-weight:700}
@@ -149,7 +149,7 @@ button,input,textarea,select{font-family:inherit}
   .audioDock .btn{min-height:38px;font-size:1rem}
 }
 
-@media(max-width:420px){body{font-size:16px;padding-inline:4px}.btn{font-size:.9rem}}
+@media(max-width:420px){body{font-size:16px;padding-inline:4px;overflow-x:hidden}.app{gap:8px}.boardWrap{width:100%}.board{width:min(100%,calc(100vw - 8px))}.side{gap:8px}.ctrls{gap:5px}.ctrls .btn{min-height:44px}.audioDock{gap:5px}.audioDock .btn{min-height:40px}}
 /* Desktop / 16:9: history | board | players+buttons in one screen (phones and portrait tablets keep the single column above) */
 @media(min-width:1000px) and (min-height:560px){
 .app{--A:min(calc(100vw - 16px),1600px);--bo:max(340px,min(calc(100dvh - 125px),calc(100vw - 640px),880px));
