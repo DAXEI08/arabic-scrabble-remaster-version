@@ -27,8 +27,6 @@ const SFX = {
   'pass':        {src:'assets/audio/pass.mp3',        fallback:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
   'undo':        {src:'assets/audio/undo.mp3',        fallback:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
   'game-end':    {src:'assets/audio/game-end.mp3',    volume:.48, pool:2, cooldown:200},
-  'victory':     {src:'assets/audio/victory.mp3',     fallback:'assets/audio/word-submit.mp3', volume:.52, pool:1, cooldown:300},
-  'defeat':      {src:'assets/audio/defeat.mp3',      fallback:'assets/audio/game-end.mp3', volume:.44, pool:1, cooldown:300},
   // UI-only feedback uses the existing tile-select MP3, so no new asset is required.
   'button-click': {src:'assets/audio/tile-select.mp3', volume:.14, pool:2, cooldown:75}
 };
@@ -313,6 +311,21 @@ export function playDelayedSFX(name, delayMs = 0) {
   }, delayMs);
 
   delayedSfxTimers.add(timer);
+}
+
+export function prepareForNewGame() {
+  audioSession++;
+  clearDelayedSFX();
+  cancelFade();
+  ducked = false;
+  stopAllSFX();
+
+  active = false;
+  if (bgm) {
+    bgm.pause();
+    try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
+    bgm.volume = 0;
+  }
 }
 
 export function startNewGameAudio() {
