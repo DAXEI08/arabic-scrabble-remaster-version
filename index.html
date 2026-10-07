@@ -11,7 +11,10 @@
 <header>
 <h1>Arabic Scrabble</h1>
 <span class="by">by esbepe</span>
+<div class="audioControls" aria-label="إعدادات الصوت">
 <button class="btn audioBtn" id="bSound" type="button" aria-label="كتم الصوت">🔊</button>
+<button class="btn audioSettingsBtn" id="bAudioSettings" type="button" aria-label="إعدادات الصوت" title="إعدادات الصوت">⚙</button>
+</div>
 </header>
 <section class="boardWrap">
 <div id="board" class="board" role="grid" aria-label="لوح اللعب"></div>
@@ -36,6 +39,27 @@
 <dialog id="sd" aria-labelledby="sT"><h2 id="sT" tabindex="-1" autofocus>مدة اللعبة</h2><p>الوقت لكل لاعب — تبدأ الساعة بعد أول حركة.</p><form method="dialog" id="sf"></form></dialog>
 <dialog id="bd" aria-labelledby="bT"><h2 id="bT" tabindex="-1" autofocus>اختر الحرف</h2><form method="dialog" id="bf"></form><form method="dialog" style="margin-top:10px"><button class="btn" value="">إلغاء</button></form></dialog>
 <dialog id="jd" aria-labelledby="jT"><h2 id="jT" tabindex="-1" autofocus></h2><div id="jB"></div></dialog>
+<dialog id="ad" aria-labelledby="aT">
+<h2 id="aT" tabindex="-1">إعدادات الصوت</h2>
+<div class="audioPanel">
+<div class="audioMaster">
+<button class="btn" id="bAudioMute" type="button" aria-pressed="false">🔊 الصوت مفعّل</button>
+</div>
+<div class="audioRow">
+<div class="audioRowHead"><label for="musicVolume">الموسيقى</label><output id="musicVolumeValue" for="musicVolume">35%</output></div>
+<input class="audioRange" id="musicVolume" type="range" min="0" max="100" step="1" value="35" aria-label="مستوى صوت الموسيقى">
+</div>
+<div class="audioRow">
+<div class="audioRowHead"><label for="sfxVolume">المؤثرات الصوتية</label><output id="sfxVolumeValue" for="sfxVolume">70%</output></div>
+<input class="audioRange" id="sfxVolume" type="range" min="0" max="100" step="1" value="70" aria-label="مستوى صوت المؤثرات الصوتية">
+</div>
+<div class="audioToggles">
+<button class="btn" id="bMusicToggle" type="button" aria-pressed="true">🎵 الموسيقى: تشغيل</button>
+<button class="btn" id="bSfxToggle" type="button" aria-pressed="true">🔔 المؤثرات: تشغيل</button>
+</div>
+<form method="dialog"><button class="btn" value="">إغلاق</button></form>
+</div>
+</dialog>
 
 <!-- Optional background music.
      Just put your MP3 at: assets/audio/bgm.mp3 -->
