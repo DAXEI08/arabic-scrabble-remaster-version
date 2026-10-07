@@ -12,7 +12,7 @@ Place the optional audio files in this folder. The game continues to work when a
 
 ## Sound effects
 
-Add these files to enable the corresponding effects:
+These files are supported as dedicated effects. When one is missing, the game automatically falls back to a compatible custom MP3 already present in `assets/audio/`, so buttons/actions do not become silent:
 
 `tile-select.mp3` — selecting a tile  
 `tile-place.mp3` — placing a tile on the board  
