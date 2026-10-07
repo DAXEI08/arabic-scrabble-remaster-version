@@ -39,8 +39,6 @@ let muted = DEFAULT_PREFS.muted;
 let prefs = {...DEFAULT_PREFS};
 let ducked = false;
 let fadeFrame = 0;
-let audioSession = 0;
-const delayedSfxTimers = new Set();
 
 const clips = new Map();
 const lastPlayed = new Map();
@@ -293,29 +291,7 @@ function bindSettingsControls() {
   }
 }
 
-function clearDelayedSFX() {
-  for (const timer of delayedSfxTimers) clearTimeout(timer);
-  delayedSfxTimers.clear();
-}
-
-export function playDelayedSFX(name, delayMs = 0) {
-  if (!Number.isFinite(delayMs) || delayMs <= 0) {
-    playSFX(name);
-    return;
-  }
-
-  const session = audioSession;
-  const timer = setTimeout(() => {
-    delayedSfxTimers.delete(timer);
-    if (session === audioSession) playSFX(name);
-  }, delayMs);
-
-  delayedSfxTimers.add(timer);
-}
-
 export function prepareForNewGame() {
-  audioSession++;
-  clearDelayedSFX();
   cancelFade();
   ducked = false;
   stopAllSFX();
@@ -329,8 +305,6 @@ export function prepareForNewGame() {
 }
 
 export function startNewGameAudio() {
-  audioSession++;
-  clearDelayedSFX();
   stopAllSFX();
   lastPlayed.clear();
   ducked = false;
