@@ -295,10 +295,6 @@ function bindSettingsControls() {
   }
 }
 
-export function stopAllSFXNow() {
-  stopAllSFX();
-}
-
 function clearDelayedSFX() {
   for (const timer of delayedSfxTimers) clearTimeout(timer);
   delayedSfxTimers.clear();
