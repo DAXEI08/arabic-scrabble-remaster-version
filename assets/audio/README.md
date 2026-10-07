@@ -25,10 +25,7 @@ These files are supported as dedicated effects. When one is missing, the game au
 `undo.mp3` — undoing the last move  
 `game-end.mp3` — game finished
 
-Optional result sounds are also supported:
-
-`victory.mp3` — victory cue  
-`defeat.mp3` — defeat cue
+Win/lose-specific audio cues are intentionally not used. The game uses the single `game-end.mp3` cue when a match ends.
 
 ## Recommended feel
 
