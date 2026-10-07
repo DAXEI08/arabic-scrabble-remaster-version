@@ -127,5 +127,8 @@ export function endGame(reason) {
   const [a, b] = [S.players[0].score, S.players[1].score];
   const win = a === b ? 'تعادل!' : `الفائز: ${NAMES[a > b ? 0 : 1]}`;
   render();
-  ask('انتهت اللعبة', `${REASONS[reason]}\n\n${lines.join('\n')}\n\n${win}`, 'لعبة جديدة', () => {\n    prepareForNewGame();\n    chooseDuration();\n  });
+  ask('انتهت اللعبة', `${REASONS[reason]}\n\n${lines.join('\n')}\n\n${win}`, 'لعبة جديدة', () => {
+    prepareForNewGame();
+    chooseDuration();
+  });
 }
