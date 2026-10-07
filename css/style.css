@@ -126,11 +126,14 @@ button,input,textarea,select{font-family:inherit}
     white-space:nowrap;
   }
   .by{font-size:.75rem}
-  .audioBtn{
+  .audioControls{
+    top:50%;
+    inset-inline-end:4px;
+    transform:translateY(-50%);
+  }
+  .audioBtn,.audioSettingsBtn{
     width:40px;
     min-height:40px;
-    top:50%;
-    transform:translateY(-50%);
     font-size:1rem;
     z-index:5;
     flex:none;
@@ -193,8 +196,8 @@ h1{font-size:.95rem;letter-spacing:.06em;text-align:center}header{text-align:cen
 @media(orientation:landscape) and (max-height:559px){
 /* Keep audio control clear of the compact landscape title and board. */
 header{min-height:42px;padding-inline:88px}
-.audioControls{inset-inline-end:2px}
-.audioBtn,.audioSettingsBtn{width:38px;min-height:36px;top:50%;transform:translateY(-50%);font-size:1rem;z-index:5}
+.audioControls{top:50%;inset-inline-end:2px;transform:translateY(-50%)}
+.audioBtn,.audioSettingsBtn{width:38px;min-height:36px;font-size:1rem;z-index:5}
 .side,.ctrls,.players{gap:5px}
 #toast{min-height:24px;font-size:.85rem;padding:0 8px}
 .panel{padding:5px 8px}.phead{margin-bottom:3px}
