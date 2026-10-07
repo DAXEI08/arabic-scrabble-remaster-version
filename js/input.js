@@ -4,7 +4,7 @@ import { $, S, app, BY, inMove, cur } from './state.js';
 import { toast, fail, ask, render, chooseDuration, takeDialogCallbacks } from './ui.js';
 import { place, unplace, submit, doSwap, pass, undo, startSwap, cancelSwapOrMove, newGame } from './game.js';
 import { openJudge, onJudgeClick, abortJudge } from './judge.js';
-import { playBGM, playSFX } from './audio.js';
+import { startNewGameAudio, playSFX } from './audio.js';
 
 function onSquare(r, c) {
   if (S.ended || S.swap) return;
@@ -105,8 +105,8 @@ function bindDialogs() {
       () => {
         app.firstRun = false;
         newGame(m);
-        // Reset and start the BGM for every new game.
-        playBGM(true);
+        // Cleanly terminate the previous audio session and start the new game's BGM.
+        startNewGameAudio();
       },
       chooseDuration,
       'btn'
