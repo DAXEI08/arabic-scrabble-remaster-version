@@ -19,11 +19,12 @@ body{font-family:var(--font);color:var(--ivory);min-height:100dvh;padding:max(8p
 background:radial-gradient(ellipse at top,#4a2d1b,#24150c 70%) fixed;font-size:18px}
 .app{max-width:760px;margin:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 header{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}
-.audioControls{position:absolute;inset-inline-end:0;top:0;display:flex;gap:5px;align-items:center}
-.audioBtn,.audioSettingsBtn{width:44px;min-height:40px;padding:0;font-size:1.1rem}
-.audioSettingsBtn{font-size:1rem}
+.audioDock{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:6px;margin-top:2px}
+.audioDock .btn{min-height:42px}
+.audioBtn{font-size:1.1rem}
+.audioSettingsBtn{font-size:.95rem}
 .audioBtn.muted{opacity:.65}
-.audioSettingsBtn{opacity:.9}
+.audioDock .audioSettingsBtn{opacity:.9}
 h1{margin:0;font-size:2rem;color:var(--gold);text-shadow:0 2px 4px #0008;direction:ltr;text-transform:uppercase;letter-spacing:.12em;line-height:1.1}
 .by{opacity:.55;font-size:.85rem}.bag{margin-top:8px;text-align:center;font-size:1rem;opacity:.9;min-height:1.2em}
 .boardWrap{min-width:0}
@@ -126,26 +127,18 @@ button,input,textarea,select{font-family:inherit}
     white-space:nowrap;
   }
   .by{font-size:.75rem}
-  .audioControls{
-    top:50%;
-    inset-inline-end:4px;
-    transform:translateY(-50%);
-  }
-  .audioBtn,.audioSettingsBtn{
-    width:40px;
-    min-height:40px;
-    font-size:1rem;
-    z-index:5;
-    flex:none;
-  }
+  .audioDock{grid-template-columns:1fr 1.7fr;margin-top:0}
+  .audioDock .btn{min-height:42px}
+  .audioBtn{font-size:1rem}
+  .audioSettingsBtn{font-size:.9rem}
 }
 
 /* Extra-small phones: tighter header spacing while preserving a comfortable audio hit area. */
 @media (max-width:360px) and (orientation:portrait){
   header{padding-inline:88px;min-height:52px}
   h1{font-size:clamp(.92rem,5.4vw,1.15rem);letter-spacing:.04em}
-  .audioControls{inset-inline-end:2px}
-  .audioBtn,.audioSettingsBtn{width:38px;min-height:38px;font-size:.95rem}
+  .audioDock{grid-template-columns:1fr 1.6fr}
+  .audioDock .btn{min-height:38px;font-size:.85rem}
 }
 
 @media(max-width:420px){body{font-size:16px;padding-inline:4px}.btn{font-size:.9rem}}
@@ -194,11 +187,11 @@ h1{font-size:.95rem;letter-spacing:.06em;text-align:center}header{text-align:cen
 }
 /* Phones turned sideways: smaller racks, clocks and control buttons (both landscape layouts) */
 @media(orientation:landscape) and (max-height:559px){
-/* Keep audio control clear of the compact landscape title and board. */
-header{min-height:42px;padding-inline:88px}
-.audioControls{top:50%;inset-inline-end:2px;transform:translateY(-50%)}
-.audioBtn,.audioSettingsBtn{width:38px;min-height:36px;font-size:1rem;z-index:5}
+header{min-height:42px}
+.audioDock{grid-template-columns:1fr 1.6fr}
+.audioDock .btn{min-height:34px;font-size:.78rem}
 .side,.ctrls,.players{gap:5px}
+.audioDock{gap:5px;margin-top:0}
 #toast{min-height:24px;font-size:.85rem;padding:0 8px}
 .panel{padding:5px 8px}.phead{margin-bottom:3px}
 .pname{font-size:.95rem}.ptime{font-size:1rem}.pscore{font-size:1.1rem}
