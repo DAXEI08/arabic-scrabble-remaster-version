@@ -55,8 +55,9 @@ let sessionId = 0;
 let pausedByVisibility = false;
 
 const sourcePools = new Map(); // src -> Audio[]; one pool per unique asset
-const voiceMeta = new WeakMap(); // Audio -> {eventName, priority, startedAt}
+const voiceMeta = new WeakMap(); // Audio -> {eventName, priority, startedAt, playToken}
 const lastPlayed = new Map();
+let playToken = 0;
 
 const clamp01 = (value, fallback) => {
   const n = Number(value);
@@ -684,13 +685,21 @@ export function playSFX(name) {
   });
 
   const stamp = now;
+  const token = ++playToken;
   lastPlayed.set(name, stamp);
+  voiceMeta.set(voice, {
+    eventName: name,
+    priority: cfg.priority,
+    startedAt: now,
+    playToken: token
+  });
 
   const promise = safePlay(voice);
   promise.then(ok => {
     if (ok) return;
     const current = voiceMeta.get(voice);
-    if (current?.eventName === name) voiceMeta.delete(voice);
+    if (current?.playToken !== token) return;
+    voiceMeta.delete(voice);
     if (lastPlayed.get(name) === stamp) lastPlayed.delete(name);
     stopVoice(voice);
   });
