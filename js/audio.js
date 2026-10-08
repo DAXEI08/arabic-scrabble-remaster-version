@@ -66,6 +66,7 @@ let schedulerTimer = 0;
 let nextMusicTime = 0;
 let musicStep = 0;
 let musicSession = 0;
+let audioOperationId = 0;
 
 let duckDepth = 0;
 let ducked = false;
@@ -138,7 +139,11 @@ function ensureContext() {
   if (typeof Context !== 'function') return null;
 
   try {
-    audioContext = new Context({latencyHint:'interactive'});
+    try {
+      audioContext = new Context({latencyHint:'interactive'});
+    } catch {
+      audioContext = new Context();
+    }
 
     masterGain = audioContext.createGain();
     musicGain = audioContext.createGain();
@@ -1072,6 +1077,7 @@ function bindSettingsControls() {
 }
 
 export function prepareForNewGame() {
+  audioOperationId++;
   musicSession++;
   active = false;
   duckDepth = 0;
@@ -1089,6 +1095,7 @@ export function prepareForNewGame() {
 }
 
 export async function startNewGameAudio() {
+  const requestId = ++audioOperationId;
   musicSession++;
   active = true;
   duckDepth = 0;
@@ -1098,8 +1105,9 @@ export async function startNewGameAudio() {
   stopAllSFX();
   lastPlayed.clear();
 
+  const requestId = ++audioOperationId;
   const ctx = await resumeContext();
-  if (!ctx) return;
+  if (!ctx || requestId !== audioOperationId || !active) return;
 
   nextMusicTime = ctx.currentTime + 0.04;
 
@@ -1139,14 +1147,24 @@ export function playBGM(reset = false) {
     stopScheduler();
   }
 
+  const requestId = ++audioOperationId;
+
   resumeContext().then(context => {
-    if (!context || !active || document.hidden || !allowedMusic()) return;
+    if (
+      !context ||
+      requestId !== audioOperationId ||
+      !active ||
+      document.hidden ||
+      !allowedMusic()
+    ) return;
+
     fadeMusicIn();
     startScheduler(reset);
   });
 }
 
 export function stopBGM() {
+  audioOperationId++;
   active = false;
   fadeMusicOut(false);
 }
@@ -1276,7 +1294,7 @@ export function playSFX(name) {
     return;
   }
 
-  const start = Math.max(ctx.currentTime + 0.004, now / 1000 + 0.004);
+  const start = ctx.currentTime + 0.004;
   lastPlayed.set(name, now);
 
   try {
