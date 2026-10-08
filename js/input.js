@@ -4,7 +4,7 @@ import { $, S, app, BY, inMove, cur } from './state.js';
 import { toast, fail, ask, render, chooseDuration, takeDialogCallbacks } from './ui.js';
 import { place, unplace, submit, doSwap, pass, undo, startSwap, cancelSwapOrMove, newGame } from './game.js';
 import { openJudge, onJudgeClick, abortJudge } from './judge.js';
-import { startNewGameAudio, playSFX } from './audio.js';
+import { startNewGameAudio, playSFX, setMusicDucked } from './audio.js';
 
 function onSquare(r, c) {
   if (S.ended || S.swap) return;
@@ -88,6 +88,7 @@ function bindDialogs() {
     if ($('#dlg').returnValue === 'ok') { if (ok) ok(); } else if (cancel) cancel();
   });
   $('#bd').addEventListener('close', () => {
+    setMusicDucked(false);
     if (!$('#dlg').open && !$('#sd').open) { S.paused = false; S.last = performance.now(); }
     const e = S.pending; if (!e) return;
     S.pending = null;
@@ -113,7 +114,7 @@ function bindDialogs() {
       chooseDuration,
       'btn'
     );
-    else { S.paused = false; S.last = performance.now(); }
+    else { setMusicDucked(false); S.paused = false; S.last = performance.now(); }
   });
 }
 
