@@ -594,6 +594,20 @@ const MELODY_B = Object.freeze([
   4, 2, 1, 0
 ]);
 
+const MELODY_C = Object.freeze([
+  0, 1, 2, 5,
+  4, 3, 2, null,
+  0, 2, 4, 6,
+  5, 4, 2, null
+]);
+
+const MELODY_D = Object.freeze([
+  0, 1, 2, 3,
+  4, 6, 5, null,
+  4, 3, 2, 1,
+  0, null, 2, 0
+]);
+
 function midiLike(degree, octave = 0) {
   if (degree == null) return null;
   const index = Math.max(0, Math.min(HIJAZ.length - 1, degree));
@@ -828,8 +842,12 @@ function scheduleNoiseVoiceBGM(start, gain, duration) {
 }
 
 function scheduleMusicStep(stepTime, step) {
-  const phase = Math.floor(step / MUSIC.stepsPerBar) % 2;
-  const pattern = phase === 0 ? MELODY_A : MELODY_B;
+  const phase = Math.floor(step / MUSIC.stepsPerBar) % 4;
+  const pattern =
+    phase === 0 ? MELODY_A :
+    phase === 1 ? MELODY_B :
+    phase === 2 ? MELODY_C :
+    MELODY_D;
   const degree = pattern[step % MUSIC.stepsPerBar];
 
   if (degree != null) {
@@ -868,7 +886,7 @@ function schedulerTick() {
     ) {
       scheduleMusicStep(nextMusicTime, musicStep);
       nextMusicTime += 60 / MUSIC.bpm / MUSIC.stepsPerBeat;
-      musicStep = (musicStep + 1) % (MUSIC.stepsPerBar * 2);
+      musicStep = (musicStep + 1) % (MUSIC.stepsPerBar * 4);
     }
   } finally {
     schedulerBusy = false;
@@ -950,8 +968,15 @@ function bindPlaybackGesture() {
 
   const resume = () => {
     if (!active || !audioContext || document.hidden) return;
+    const requestId = audioOperationId;
     resumeContext().then(ctx => {
-      if (ctx && allowedMusic() && !musicRunning) {
+      if (
+        ctx &&
+        requestId === audioOperationId &&
+        active &&
+        allowedMusic() &&
+        !musicRunning
+      ) {
         fadeMusicIn();
         startScheduler(false);
       }
@@ -966,6 +991,8 @@ function bindPlaybackGesture() {
 async function handleVisibilityChange() {
   const ctx = audioContext;
   if (!ctx || !active) return;
+
+  const requestId = audioOperationId;
 
   if (document.hidden) {
     stopMusicVoices();
@@ -985,6 +1012,13 @@ async function handleVisibilityChange() {
   } catch {
     return;
   }
+
+  if (
+    requestId !== audioOperationId ||
+    !active ||
+    document.hidden ||
+    !allowedMusic()
+  ) return;
 
   if (active && allowedMusic()) {
     nextMusicTime = ctx.currentTime + 0.04;
@@ -1104,8 +1138,6 @@ export async function startNewGameAudio() {
   stopScheduler();
   stopAllSFX();
   lastPlayed.clear();
-
-  const requestId = ++audioOperationId;
   const ctx = await resumeContext();
   if (!ctx || requestId !== audioOperationId || !active) return;
 
@@ -1170,6 +1202,7 @@ export function stopBGM() {
 }
 
 export function toggleMute() {
+  const requestId = ++audioOperationId;
   prefs.muted = !prefs.muted;
   savePrefs();
 
@@ -1182,7 +1215,12 @@ export function toggleMute() {
     setParam(masterGain.gain, 1, 0.015);
     if (active && allowedMusic()) {
       resumeContext().then(() => {
-        if (active && allowedMusic() && !document.hidden) {
+        if (
+          requestId === audioOperationId &&
+          active &&
+          allowedMusic() &&
+          !document.hidden
+        ) {
           fadeMusicIn();
           startScheduler(false);
         }
@@ -1195,12 +1233,19 @@ export function toggleMute() {
 }
 
 export function setMusicEnabled(on) {
+  const requestId = ++audioOperationId;
   prefs.music = Boolean(on);
   savePrefs();
 
   if (allowedMusic() && active) {
     resumeContext().then(ctx => {
-      if (!ctx || !active || document.hidden) return;
+      if (
+        !ctx ||
+        requestId !== audioOperationId ||
+        !active ||
+        document.hidden ||
+        !allowedMusic()
+      ) return;
       fadeMusicIn();
       startScheduler(false);
     });
