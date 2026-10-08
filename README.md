@@ -1,6 +1,7 @@
 # Arabic Scrabble
 
 A two-player Arabic Scrabble game for one device, with per-player clocks, blank tiles, swap/pass/undo and a human-judge challenge system.
+live : https://daxei08.github.io/kamus-arab-rpl/#kosakata
 
 ## Technology
 
