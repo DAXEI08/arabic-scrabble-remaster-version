@@ -46,8 +46,8 @@ box-shadow:inset 0 1px 0 #fff3,inset 0 -1px 2px #0004;user-select:none;cursor:po
 .k0{background:#b98f58}.k1{background:#6f9db0}.k2{background:#2f6b8a}.k3{background:#b9606b}.k4{background:#8e2a36}.k5{background:#c9a227;color:#3b2a05}
 .k5 .pl{font-size:1.25em;gap:0}
 .pl{display:grid;gap:.1em;text-align:center;pointer-events:none}.pl .m{direction:ltr;unicode-bidi:isolate}
-.sq.has{box-shadow:none}.sq.drop{outline:2px dashed var(--gold)}
-.tile{position:absolute;inset:0;display:grid;place-items:center;-webkit-user-drag:none;border-radius:12%;color:var(--green);font-weight:700;cursor:pointer;
+.sq.has{box-shadow:none}.sq.drop,.slot.drop{outline:2px dashed var(--gold);outline-offset:-2px}
+.tile{position:absolute;inset:0;display:grid;place-items:center;border-radius:12%;color:var(--green);font-weight:700;cursor:pointer;
 background:linear-gradient(145deg,#fcf5de,#e6d4a0);box-shadow:inset 0 1px 0 #fff9,0 2px 3px #0007;transition:transform .15s,box-shadow .15s;touch-action:manipulation}
 .tile b{font-size:var(--lf);line-height:1;font-weight:700}
 .tile i{position:absolute;bottom:3%;left:9%;font-style:normal;font-size:var(--vf);font-weight:700}
