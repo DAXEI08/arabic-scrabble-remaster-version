@@ -678,11 +678,6 @@ export function playSFX(name) {
   stopVoice(voice);
 
   voice.volume = targetVolume;
-  voiceMeta.set(voice, {
-    eventName: name,
-    priority: cfg.priority,
-    startedAt: now
-  });
 
   const stamp = now;
   const token = ++playToken;
