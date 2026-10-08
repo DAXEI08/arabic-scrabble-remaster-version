@@ -35,13 +35,25 @@ function onSlot(p, i) {
   render();
 }
 
+let activeDropTarget = null;
+
 function clearDropTargets() {
-  document.querySelectorAll('.sq.drop,.slot.drop').forEach(el => el.classList.remove('drop'));
+  if (activeDropTarget) {
+    activeDropTarget.classList.remove('drop');
+    activeDropTarget = null;
+  }
 }
 
 function markDropTarget(el, valid) {
   if (!el) return;
-  el.classList.toggle('drop', Boolean(valid));
+  if (activeDropTarget && activeDropTarget !== el) activeDropTarget.classList.remove('drop');
+  if (valid) {
+    el.classList.add('drop');
+    activeDropTarget = el;
+  } else if (activeDropTarget === el) {
+    el.classList.remove('drop');
+    activeDropTarget = null;
+  }
 }
 
 function canDropOnSquare(sq, t) {
