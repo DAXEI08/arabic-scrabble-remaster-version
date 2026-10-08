@@ -1055,6 +1055,11 @@ function bindAudioLifecycleAdapters() {
       try { audioContext.suspend(); } catch {}
     }
   });
+
+  window.addEventListener('pageshow', () => {
+    if (!audioContext || !active || document.hidden) return;
+    handleVisibilityChange();
+  });
 }
 
 function bindSettingsControls() {
