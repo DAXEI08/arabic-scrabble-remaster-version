@@ -35,35 +35,117 @@ function onSlot(p, i) {
   render();
 }
 
+function clearDropTargets() {
+  document.querySelectorAll('.sq.drop,.slot.drop').forEach(el => el.classList.remove('drop'));
+}
+
+function markDropTarget(el, valid) {
+  if (!el) return;
+  el.classList.toggle('drop', Boolean(valid));
+}
+
+function canDropOnSquare(sq, t) {
+  if (!sq || !t || S.ended || S.swap || !inMove(t) && !cur().rack.includes(t)) return false;
+  const r = Number(sq.dataset.r), c = Number(sq.dataset.c);
+  return !S.board[r][c];
+}
+
+function canDropOnSlot(slot, t) {
+  if (!slot || !t || S.ended || S.swap || !inMove(t)) return false;
+  return Number(slot.dataset.p) === S.cur;
+}
+
 function bindBoardInput() {
   document.addEventListener('click', e => {
     const sq = e.target.closest('.sq'), sl = e.target.closest('.slot');
     if (sq) onSquare(+sq.dataset.r, +sq.dataset.c); else if (sl) onSlot(+sl.dataset.p, +sl.dataset.i);
   });
+
   document.addEventListener('keydown', e => {
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sq,.tile')) { e.preventDefault(); (e.target.closest('.slot') || e.target.closest('.sq') || e.target).click(); }
-    if (e.key === 'Escape' && S.pick) { S.pick = null; playSFX('tile-cancel'); render(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sq,.tile')) {
+      e.preventDefault();
+      (e.target.closest('.slot') || e.target.closest('.sq') || e.target).click();
+    }
+    if (e.key === 'Escape' && S.pick) {
+      S.pick = null;
+      playSFX('tile-cancel');
+      render();
+    }
   });
+
+  // Native HTML5 drag-and-drop for desktop/fine-pointer devices.
+  // Tap/click selection remains the fallback for touch devices.
   document.addEventListener('dragstart', e => {
-    // Native HTML drag is unreliable on touchscreens and can swallow the tap/long-press gesture.
-    if (window.matchMedia('(pointer: coarse)').matches) return e.preventDefault();
-    const el = e.target.closest && e.target.closest('.tile'), t = el && BY[el.dataset.id];
-    if (!t || el.classList.contains('dim') || S.ended || S.swap) return e.preventDefault();
-    S.drag = t; S.pick = null; e.dataTransfer.setData('text/plain', el.dataset.id); e.dataTransfer.effectAllowed = 'move';
+    const el = e.target.closest?.('.tile');
+    const t = el && BY[el.dataset.id];
+
+    if (!t || el.classList.contains('dim') || S.ended || S.swap || !e.dataTransfer) {
+      e.preventDefault();
+      return;
+    }
+
+    S.drag = t;
+    S.pick = null;
+    clearDropTargets();
+
+    try {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(t.id));
+    } catch {
+      // Some embedded browsers expose a restricted DataTransfer implementation.
+      // The in-memory S.drag reference is still sufficient for the drop handler.
+    }
   });
+
   document.addEventListener('dragover', e => {
     if (!S.drag) return;
-    const sq = e.target.closest('.sq'), sl = e.target.closest('.slot');
-    if ((sq && !S.board[sq.dataset.r][sq.dataset.c]) || (sl && inMove(S.drag))) e.preventDefault();
+
+    const sq = e.target.closest?.('.sq');
+    const sl = e.target.closest?.('.slot');
+    const validSq = canDropOnSquare(sq, S.drag);
+    const validSlot = canDropOnSlot(sl, S.drag);
+    const valid = validSq || validSlot;
+
+    clearDropTargets();
+    if (valid) {
+      e.preventDefault();
+      markDropTarget(validSq ? sq : sl, true);
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    }
   });
+
   document.addEventListener('drop', e => {
-    const t = S.drag; S.drag = null; if (!t) return;
-    const sq = e.target.closest('.sq'), sl = e.target.closest('.slot');
-    if (sq) { e.preventDefault(); if (!place(t, +sq.dataset.r, +sq.dataset.c)) render(); }
-    else if (sl && +sl.dataset.p === S.cur && inMove(t)) { e.preventDefault(); unplace(inMove(t)); render(); }
-    else render();
+    if (!S.drag) return;
+
+    const t = S.drag;
+    S.drag = null;
+    clearDropTargets();
+
+    const sq = e.target.closest?.('.sq');
+    const sl = e.target.closest?.('.slot');
+
+    if (canDropOnSquare(sq, t)) {
+      e.preventDefault();
+      place(t, Number(sq.dataset.r), Number(sq.dataset.c));
+      return;
+    }
+
+    if (canDropOnSlot(sl, t)) {
+      e.preventDefault();
+      unplace(inMove(t));
+      render();
+      return;
+    }
+
+    e.preventDefault();
+    render();
   });
-  document.addEventListener('dragend', () => { if (S.drag) { S.drag = null; render(); } });
+
+  document.addEventListener('dragend', () => {
+    S.drag = null;
+    clearDropTargets();
+    render();
+  });
 }
 
 function bindControls() {
