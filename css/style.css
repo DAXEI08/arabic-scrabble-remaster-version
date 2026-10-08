@@ -1,14 +1,14 @@
 /* One bundled font set for every device: Amiri (Arabic) + Tinos (Latin, digits, punctuation). No system fonts are used, so desktop and mobile look identical. */
-@font-face{font-family:'ScrabbleMix';font-weight:400;font-display:block;
+@font-face{font-family:'ScrabbleMix';font-weight:400;font-display:swap;
  src:url('../assets/fonts/Amiri-Regular.woff2') format('woff2');
  unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF}
-@font-face{font-family:'ScrabbleMix';font-weight:700;font-display:block;
+@font-face{font-family:'ScrabbleMix';font-weight:700;font-display:swap;
  src:url('../assets/fonts/Amiri-Bold.woff2') format('woff2');
  unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF}
-@font-face{font-family:'ScrabbleMix';font-weight:400;font-display:block;
+@font-face{font-family:'ScrabbleMix';font-weight:400;font-display:swap;
  src:url('../assets/fonts/Tinos-Regular.woff2') format('woff2');
  unicode-range:U+0000-05FF,U+2000-206F,U+20A0-20CF}
-@font-face{font-family:'ScrabbleMix';font-weight:700;font-display:block;
+@font-face{font-family:'ScrabbleMix';font-weight:700;font-display:swap;
  src:url('../assets/fonts/Tinos-Bold.woff2') format('woff2');
  unicode-range:U+0000-05FF,U+2000-206F,U+20A0-20CF}
 :root{--wood:#2b1a10;--gold:#d4af37;--ivory:#f6ecd2;--green:#14532d;--burg:#7a2433;
