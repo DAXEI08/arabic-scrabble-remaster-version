@@ -1,30 +1,72 @@
-# Audio assets
+# Audio system
 
-Place the bundled audio files in this folder. The game continues to work when optional dedicated effects are not provided; unsupported effects reuse compatible bundled sounds.
+Arabic Scrabble now uses a **zero-MP3 procedural audio system** in `js/audio.js`.
 
-## Background music
+## Audio assets
 
-`bgm.mp3`
+No MP3 runtime assets are required under `assets/audio/`.
 
-- Loops automatically during gameplay.
-- Restarts from 00:00 for every new game.
-- Default volume: 35%.
+The folder may contain only documentation and repository housekeeping files.
 
-## Sound effects
+## Procedural SFX
 
-These files are supported as dedicated effects. When one is missing, the game automatically falls back to a compatible custom MP3 already present in `assets/audio/`, so buttons/actions do not become silent:
+The audio engine synthesizes all gameplay/UI effects with Web Audio API:
 
-`tile-select.mp3` — selecting a tile  
-`tile-place.mp3` — placing a tile on the board  
-`tile-cancel.mp3` — removing/cancelling a placed or selected tile  
-`word-submit.mp3` — submitting a valid move  
-`invalid.mp3`, `score.mp3`, `tile-swap.mp3`, `pass.mp3`, and `undo.mp3` are optional dedicated replacements. Until those files are added, the current build reuses `tile-cancel.mp3`, `word-submit.mp3`, or `tile-place.mp3` directly, avoiding unnecessary 404 requests.
-`game-end.mp3` — game finished
+- `button-click` — short clean UI tick.
+- `tile-select` — light confirmation tone.
+- `tile-place` — warm tile tap with a short noise transient.
+- `tile-cancel` — soft downward cancellation tone.
+- `word-submit` — two-note positive chime.
+- `invalid` — muted dissonant warning.
+- `score` — short ascending score flourish.
+- `tile-swap` — compact tap + tone.
+- `pass` — low soft pass tone.
+- `undo` — short descending confirmation.
+- `game-end` — calm Hijaz-colored resolution; there are no separate win/lose cues.
 
-Win/lose-specific audio cues are intentionally not used. The game uses the single `game-end.mp3` cue when a match ends.
+No external audio file is loaded for these events.
 
-## Recommended feel
+## Procedural BGM
 
-Use short, clean effects rather than loud arcade-style sounds. Tile sounds work best with a wooden/plastic board character, while score and submit sounds should be soft chimes.
+Gameplay music is synthesized in real time with a lightweight scheduler.
 
-The in-game speaker button provides instant mute/unmute. The adjacent audio-settings button opens independent music and SFX volume controls plus per-channel toggles. All audio preferences are saved on the same device.
+The melodic material uses a **D Hijaz color in 12-TET**:
+
+`D – Eb – F# – G – A – Bb – C – D`
+
+The arrangement is intentionally subtle:
+
+- triangle/sine plucked melody;
+- low root/fifth bass;
+- quiet D/G drone;
+- restrained pulse/percussion;
+- four-bar phrase variation;
+- soft fade-in/out and modal ducking.
+
+This is an inspired Hijaz coloration, not a claim of reproducing traditional Arabic maqam performance practice or microtonal intonation.
+
+## Runtime design
+
+`js/audio.js` provides:
+
+- one shared Web Audio context;
+- logical master/music/SFX buses;
+- dynamics compression for headroom protection;
+- lazy context creation for mobile autoplay compatibility;
+- low-cost procedural synthesis instead of asset decoding;
+- deterministic lifecycle/session cleanup;
+- modal music ducking with balanced depth;
+- BGM scheduling with bounded look-ahead;
+- visibility/page lifecycle pause and resume;
+- SFX priority and cooldown handling;
+- protection against asynchronous playback races;
+- immediate end-game stinger cancellation on the new-game control;
+- persistent master/music/SFX preferences.
+
+The public API used by the game remains compatible.
+
+## Asset-quality note
+
+Because the audio is synthesized at runtime, there are no MP3 codec, bitrate, loudness, or loop-file import settings to maintain.
+
+Device-level validation is still required for perceived timbre, latency, CPU usage, autoplay/audio-focus behavior, and subjective mix quality on representative desktop, Android, and iOS browsers.
