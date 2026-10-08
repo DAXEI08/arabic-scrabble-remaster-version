@@ -1,6 +1,6 @@
 # Audio assets
 
-Place the optional audio files in this folder. The game continues to work when any file is missing.
+Place the bundled audio files in this folder. The game continues to work when optional dedicated effects are not provided; unsupported effects reuse compatible bundled sounds.
 
 ## Background music
 
@@ -18,11 +18,7 @@ These files are supported as dedicated effects. When one is missing, the game au
 `tile-place.mp3` — placing a tile on the board  
 `tile-cancel.mp3` — removing/cancelling a placed or selected tile  
 `word-submit.mp3` — submitting a valid move  
-`invalid.mp3` — invalid action or rejected input  
-`score.mp3` — successful scoring feedback  
-`tile-swap.mp3` — swapping tiles  
-`pass.mp3` — passing a turn  
-`undo.mp3` — undoing the last move  
+`invalid.mp3`, `score.mp3`, `tile-swap.mp3`, `pass.mp3`, and `undo.mp3` are optional dedicated replacements. Until those files are added, the current build reuses `tile-cancel.mp3`, `word-submit.mp3`, or `tile-place.mp3` directly, avoiding unnecessary 404 requests.
 `game-end.mp3` — game finished
 
 Win/lose-specific audio cues are intentionally not used. The game uses the single `game-end.mp3` cue when a match ends.
