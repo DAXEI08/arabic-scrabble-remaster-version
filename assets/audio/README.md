@@ -1,40 +1,72 @@
-# Audio assets
+# Audio system
 
-This project uses a single isolated web-audio layer in `js/audio.js`.
+Arabic Scrabble now uses a **zero-MP3 procedural audio system** in `js/audio.js`.
 
-## Bundled assets
+## Audio assets
 
-- `bgm.mp3` — looping gameplay background music.
-- `game-end.mp3` — single end-of-game stinger.
-- `tile-select.mp3` — tile selection/UI feedback.
-- `tile-place.mp3` — tile placement/swap feedback.
-- `tile-cancel.mp3` — cancel/pass/undo/invalid feedback.
-- `word-submit.mp3` — successful submit/score feedback.
+No MP3 runtime assets are required under `assets/audio/`.
 
-Dedicated files such as `invalid.mp3`, `score.mp3`, `tile-swap.mp3`, `pass.mp3`, and `undo.mp3` are not requested by the current build. Those logical events intentionally reuse the bundled sources above, avoiding speculative 404 requests.
+The folder may contain only documentation and repository housekeeping files.
 
-Win/lose-specific cues are not used. The game uses only `game-end.mp3` when the match ends.
+## Procedural SFX
 
-## Audio runtime behavior
+The audio engine synthesizes all gameplay/UI effects with Web Audio API:
+
+- `button-click` — short clean UI tick.
+- `tile-select` — light confirmation tone.
+- `tile-place` — warm tile tap with a short noise transient.
+- `tile-cancel` — soft downward cancellation tone.
+- `word-submit` — two-note positive chime.
+- `invalid` — muted dissonant warning.
+- `score` — short ascending score flourish.
+- `tile-swap` — compact tap + tone.
+- `pass` — low soft pass tone.
+- `undo` — short descending confirmation.
+- `game-end` — calm Hijaz-colored resolution; there are no separate win/lose cues.
+
+No external audio file is loaded for these events.
+
+## Procedural BGM
+
+Gameplay music is synthesized in real time with a lightweight scheduler.
+
+The melodic material uses a **D Hijaz color in 12-TET**:
+
+`D – Eb – F# – G – A – Bb – C – D`
+
+The arrangement is intentionally subtle:
+
+- triangle/sine plucked melody;
+- low root/fifth bass;
+- quiet D/G drone;
+- restrained pulse/percussion;
+- four-bar phrase variation;
+- soft fade-in/out and modal ducking.
+
+This is an inspired Hijaz coloration, not a claim of reproducing traditional Arabic maqam performance practice or microtonal intonation.
+
+## Runtime design
 
 `js/audio.js` provides:
 
-- independent music and SFX controls plus master mute;
-- logical music/SFX buses with per-event gain;
-- shared media pools per unique source to avoid duplicate pools for reused assets;
-- priority-based voice selection and deterministic voice stealing;
-- cooldowns applied only after a playback attempt is accepted;
-- immediate end-stinger cancellation when the new-game control is pressed;
-- session reset so old fades/voices cannot leak into a new game;
-- modal ducking with balanced state release;
+- one shared Web Audio context;
+- logical master/music/SFX buses;
+- dynamics compression for headroom protection;
+- lazy context creation for mobile autoplay compatibility;
+- low-cost procedural synthesis instead of asset decoding;
+- deterministic lifecycle/session cleanup;
+- modal music ducking with balanced depth;
+- BGM scheduling with bounded look-ahead;
 - visibility/page lifecycle pause and resume;
-- defensive handling for missing/broken audio without affecting gameplay;
-- lazy creation of SFX voices and `bgm.mp3` with `preload="none"`.
+- SFX priority and cooldown handling;
+- protection against asynchronous playback races;
+- immediate end-game stinger cancellation on the new-game control;
+- persistent master/music/SFX preferences.
 
-The existing public audio API remains compatible with the game modules.
+The public API used by the game remains compatible.
 
-## Asset guidance
+## Asset-quality note
 
-Keep SFX short and clean. Avoid clipped masters, excessive low-end, and large uncompressed files. Background music should have a clean loop point and a level that leaves headroom for gameplay SFX.
+Because the audio is synthesized at runtime, there are no MP3 codec, bitrate, loudness, or loop-file import settings to maintain.
 
-The repository stores the MP3 files directly. This web project has no Unity/Godot-style importer settings; codec/sample-rate/true-peak/loudness verification therefore requires access to the binary audio files or an in-browser/device audit.
+Device-level validation is still required for perceived timbre, latency, CPU usage, autoplay/audio-focus behavior, and subjective mix quality on representative desktop, Android, and iOS browsers.
