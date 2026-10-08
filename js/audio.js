@@ -382,7 +382,6 @@ export function stopBGM() {
 
 export function toggleMute() {
   prefs.muted = !prefs.muted;
-  muted = prefs.muted;
   savePrefs();
 
   if (prefs.muted) stopAllSFX();
