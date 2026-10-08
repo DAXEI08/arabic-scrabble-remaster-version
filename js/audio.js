@@ -1,7 +1,7 @@
-// Procedural audio engine for Arabic Scrabble.
+// Procedural acoustic-style audio engine for Arabic Scrabble.
 // Zero runtime MP3 dependencies: SFX and BGM are synthesized with Web Audio API.
-// The music uses a subtle Hijaz-colored palette in equal temperament (D-Hijaz:
-// D, Eb, F#, G, A, Bb, C), designed to stay calm and unobtrusive during play.
+// The musical layer is deliberately restrained and oud-inspired: plucked-string
+// harmonics, warm transients, sparse Hijaz-colored phrases, and a small room tail.
 //
 // Public API remains compatible with the existing game integration.
 // No gameplay state or non-audio logic is imported here.
@@ -17,14 +17,14 @@ const DEFAULT_PREFS = Object.freeze({
 });
 
 const MUSIC = Object.freeze({
-  bpm: 96,
+  bpm: 72,
   stepsPerBeat: 4,
   stepsPerBar: 16,
-  lookahead: 0.18,
-  schedulerMs: 50,
-  fadeIn: 0.65,
-  fadeOut: 0.14,
-  duckLevel: 0.18
+  lookahead: 0.24,
+  schedulerMs: 70,
+  fadeIn: 1.1,
+  fadeOut: 0.24,
+  duckLevel: 0.15
 });
 
 // D Hijaz in 12-TET: 1, b2, 3, 4, 5, b6, b7.
@@ -32,6 +32,21 @@ const HIJAZ = Object.freeze([
   293.66, 311.13, 369.99, 392.00,
   440.00, 466.16, 523.25, 587.33
 ]);
+
+const OUD = Object.freeze({
+  // Relative partial levels for a compact oud-like pluck model.
+  harmonics: Object.freeze([1, 0.38, 0.19, 0.095, 0.04]),
+  attack: 0.006,
+  body: 0.105,
+  release: 0.26,
+  pitchBloom: 0.008,
+  pitchSettle: 0.045,
+  noiseLevel: 0.18,
+  filterBase: 3100,
+  filterMin: 1200,
+  roomSend: 0.055,
+  roomReturn: 0.16
+});
 
 const SFX = Object.freeze({
   'button-click': {cooldown:55, priority:15},
@@ -55,6 +70,9 @@ let musicGain = null;
 let sfxGain = null;
 let compressor = null;
 let noiseBuffer = null;
+let roomConvolver = null;
+let roomSendGain = null;
+let roomReturnGain = null;
 
 let prefs = {...DEFAULT_PREFS};
 let initialized = false;
@@ -150,11 +168,11 @@ function ensureContext() {
     sfxGain = audioContext.createGain();
 
     compressor = audioContext.createDynamicsCompressor();
-    compressor.threshold.value = -8;
-    compressor.knee.value = 10;
-    compressor.ratio.value = 3;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.22;
+    compressor.threshold.value = -11;
+    compressor.knee.value = 18;
+    compressor.ratio.value = 2.0;
+    compressor.attack.value = 0.008;
+    compressor.release.value = 0.32;
 
     musicGain.gain.value = musicTarget();
     sfxGain.gain.value = prefs.sfx && !prefs.muted ? 1 : 0;
@@ -162,6 +180,24 @@ function ensureContext() {
 
     musicGain.connect(masterGain);
     sfxGain.connect(masterGain);
+
+    try {
+      roomConvolver = audioContext.createConvolver();
+      roomSendGain = audioContext.createGain();
+      roomReturnGain = audioContext.createGain();
+      roomSendGain.gain.value = OUD.roomSend;
+      roomReturnGain.gain.value = OUD.roomReturn;
+      roomConvolver.buffer = createRoomImpulse(audioContext);
+      musicGain.connect(roomSendGain);
+      roomSendGain.connect(roomConvolver);
+      roomConvolver.connect(roomReturnGain);
+      roomReturnGain.connect(masterGain);
+    } catch {
+      roomConvolver = null;
+      roomSendGain = null;
+      roomReturnGain = null;
+    }
+
     masterGain.connect(compressor);
     compressor.connect(audioContext.destination);
 
@@ -171,8 +207,28 @@ function ensureContext() {
     audioContext = null;
     masterGain = musicGain = sfxGain = compressor = null;
     noiseBuffer = null;
+    roomConvolver = roomSendGain = roomReturnGain = null;
     return null;
   }
+}
+
+function createRoomImpulse(ctx) {
+  const length = Math.max(1, Math.floor(ctx.sampleRate * 0.52));
+  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+
+  for (let i = 0; i < length; i++) {
+    const x = i / length;
+    const decay = Math.pow(1 - x, 2.8);
+    const early = i < Math.floor(ctx.sampleRate * 0.012) ? 0.5 : 0.15;
+    left[i] = (Math.random() * 2 - 1) * decay * early;
+    right[i] = (Math.random() * 2 - 1) * decay * early;
+  }
+
+  left[0] = 0.8;
+  right[0] = 0.78;
+  return buffer;
 }
 
 function createNoiseBuffer(ctx) {
@@ -322,57 +378,124 @@ function stopAllSFX() {
   lastPlayed.clear();
 }
 
-function scheduleToneVoice({
+function scheduleOudVoice({
   name,
   frequency,
   start,
-  duration = 0.16,
-  gain = 0.1,
-  type = 'triangle',
-  attack = 0.008,
-  release = 0.12,
-  detune = 0,
-  filterFrequency = 2200
+  duration = 0.28,
+  gain = 0.08,
+  bus = 'sfx',
+  brightness = 0.72,
+  attack = OUD.attack,
+  release = OUD.release,
+  filterFrequency = OUD.filterBase,
+  noiseLevel = OUD.noiseLevel,
+  pitchBloom = OUD.pitchBloom,
+  pitchSettle = OUD.pitchSettle
 }) {
   const ctx = ensureContext();
-  if (!ctx || !sfxGain) return null;
+  const output = bus === 'music' ? musicGain : sfxGain;
+  if (!ctx || !output) return null;
 
-  const osc = ctx.createOscillator();
+  const end = start + Math.max(0.06, duration);
+  const peak = bus === 'music' ? Math.max(0.0001, gain) : sfxTarget(name, gain);
+  const harmonics = OUD.harmonics;
+  const harmonicBus = ctx.createGain();
   const filter = ctx.createBiquadFilter();
   const envelope = ctx.createGain();
-
-  osc.type = type;
-  osc.frequency.setValueAtTime(Math.max(20, frequency), start);
-  osc.detune.setValueAtTime(detune, start);
+  const oscillators = [];
 
   filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(filterFrequency, start);
-  filter.Q.setValueAtTime(0.5, start);
+  filter.frequency.setValueAtTime(
+    Math.max(OUD.filterMin, filterFrequency * (0.74 + brightness * 0.34)),
+    start
+  );
+  filter.Q.setValueAtTime(0.35, start);
 
-  const peak = sfxTarget(name, gain);
-  const end = start + Math.max(0.025, duration);
+  harmonics.forEach((level, index) => {
+    const partial = ctx.createOscillator();
+    const partialGain = ctx.createGain();
+    const multiplier = index + 1;
+    const initial = Math.max(20, frequency * multiplier * (1 + pitchBloom));
+    const settled = Math.max(20, frequency * multiplier);
+
+    partial.type = 'sine';
+    partial.frequency.setValueAtTime(initial, start);
+    partial.frequency.exponentialRampToValueAtTime(
+      settled,
+      start + Math.max(0.012, pitchSettle)
+    );
+    partial.detune.setValueAtTime((index - 2) * 0.45, start);
+    partialGain.gain.setValueAtTime(
+      Math.max(0.001, level * (index === 0 ? 1 : brightness)),
+      start
+    );
+
+    partial.connect(partialGain);
+    partialGain.connect(harmonicBus);
+    oscillators.push(partial);
+  });
+
+  harmonicBus.connect(filter);
+  filter.connect(envelope);
+  envelope.connect(output);
+
+  const attackEnd = start + Math.min(attack, Math.max(0.003, duration * 0.10));
+  const bodyEnd = Math.min(
+    end - 0.025,
+    start + Math.max(0.065, Math.min(OUD.body + duration * 0.22, duration * 0.48))
+  );
+  const releaseStart = Math.max(attackEnd + 0.03, end - release);
 
   envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + attack);
-  envelope.gain.setValueAtTime(Math.max(0.0001, peak), Math.max(start + attack, end - release));
-  envelope.gain.exponentialRampToValueAtTime(0.0001, end);
+  envelope.gain.exponentialRampToValueAtTime(peak, attackEnd);
+  envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak * 0.46), bodyEnd);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, Math.max(bodyEnd + 0.025, releaseStart));
 
-  osc.connect(filter);
-  filter.connect(envelope);
-  envelope.connect(sfxGain);
+  let noiseSource = null;
+  if (noiseBuffer && noiseLevel > 0) {
+    const noiseGain = ctx.createGain();
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(
+      Math.min(4200, Math.max(900, filterFrequency * 0.92)),
+      start
+    );
+    noiseFilter.Q.setValueAtTime(0.65, start);
+    noiseGain.gain.setValueAtTime(0.0001, start);
+    noiseGain.gain.exponentialRampToValueAtTime(
+      Math.max(0.0001, peak * noiseLevel),
+      start + 0.003
+    );
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(0.052, duration * 0.18));
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(output);
+  }
 
   const voice = makeVoice(name, () => {
     const now = ctx.currentTime;
     envelope.gain.cancelScheduledValues(now);
-    envelope.gain.setTargetAtTime(0.0001, now, 0.012);
-    safeStopSource(osc);
+    envelope.gain.setTargetAtTime(0.0001, now, 0.018);
+    oscillators.forEach(safeStopSource);
+    if (noiseSource) safeStopSource(noiseSource);
   });
 
-  osc.onended = () => releaseVoice(voice);
+  oscillators.forEach(osc => {
+    osc.onended = () => releaseVoice(voice);
+  });
 
   try {
-    osc.start(start);
-    osc.stop(end + 0.03);
+    oscillators.forEach(osc => {
+      osc.start(start);
+      osc.stop(end + 0.04);
+    });
+    if (noiseSource) {
+      noiseSource.start(start);
+      noiseSource.stop(Math.min(end, start + Math.max(0.06, duration * 0.22)) + 0.015);
+    }
   } catch {
     releaseVoice(voice);
     return null;
@@ -442,170 +565,170 @@ function playSynthSFX(name, when) {
 
   switch (name) {
     case 'button-click':
-      scheduleToneVoice({
-        name, frequency: 880, start:t, duration:0.075,
-        gain:0.12, type:'sine', attack:0.003, release:0.06,
-        filterFrequency:3200
+      scheduleOudVoice({
+        name, frequency:587.33, start:t, duration:0.13,
+        gain:0.075, brightness:0.60, release:0.11,
+        filterFrequency:2500, noiseLevel:0.08
       });
       break;
 
     case 'tile-select':
-      scheduleToneVoice({
-        name, frequency:660, start:t, duration:0.10,
-        gain:0.15, type:'triangle', attack:0.004, release:0.075,
-        filterFrequency:2800
+      scheduleOudVoice({
+        name, frequency:440, start:t, duration:0.18,
+        gain:0.080, brightness:0.66, release:0.15,
+        filterFrequency:2400, noiseLevel:0.10
       });
       break;
 
     case 'tile-place':
-      scheduleToneVoice({
-        name, frequency:185, start:t, duration:0.13,
-        gain:0.22, type:'triangle', attack:0.002, release:0.095,
-        filterFrequency:1800
-      });
       scheduleNoiseVoice({
-        name, start:t, duration:0.045, gain:0.11,
-        highpass:950, lowpass:3600
+        name, start:t, duration:0.040, gain:0.075,
+        highpass:650, lowpass:2600
+      });
+      scheduleOudVoice({
+        name, frequency:220, start:t + 0.012, duration:0.20,
+        gain:0.095, brightness:0.48, release:0.17,
+        filterFrequency:1900, noiseLevel:0.05
       });
       break;
 
     case 'tile-cancel':
-      scheduleToneVoice({
-        name, frequency:280, start:t, duration:0.12,
-        gain:0.15, type:'triangle', attack:0.003, release:0.10,
-        filterFrequency:2200
+      scheduleOudVoice({
+        name, frequency:311.13, start:t, duration:0.18,
+        gain:0.070, brightness:0.55, release:0.15,
+        filterFrequency:2100, noiseLevel:0.07,
+        pitchBloom:0.006, pitchSettle:0.050
+      });
+      scheduleOudVoice({
+        name, frequency:246.94, start:t + 0.055, duration:0.16,
+        gain:0.048, brightness:0.50, release:0.13,
+        filterFrequency:1800, noiseLevel:0.04
       });
       break;
 
     case 'word-submit':
-      scheduleToneVoice({
-        name, frequency:523.25, start:t, duration:0.18,
-        gain:0.14, type:'triangle', attack:0.006, release:0.12,
-        filterFrequency:3000
+      scheduleOudVoice({
+        name, frequency:440, start:t, duration:0.26,
+        gain:0.065, brightness:0.62, release:0.22,
+        filterFrequency:2500, noiseLevel:0.07
       });
-      scheduleToneVoice({
-        name, frequency:659.25, start:t + 0.065, duration:0.22,
-        gain:0.12, type:'sine', attack:0.006, release:0.16,
-        filterFrequency:3600
+      scheduleOudVoice({
+        name, frequency:554.37, start:t + 0.105, duration:0.34,
+        gain:0.060, brightness:0.68, release:0.28,
+        filterFrequency:2700, noiseLevel:0.05
       });
       break;
 
     case 'invalid':
-      scheduleToneVoice({
-        name, frequency:246.94, start:t, duration:0.14,
-        gain:0.14, type:'sine', attack:0.003, release:0.10,
-        filterFrequency:1800
-      });
-      scheduleToneVoice({
-        name, frequency:233.08, start:t + 0.045, duration:0.12,
-        gain:0.095, type:'triangle', attack:0.003, release:0.09,
-        filterFrequency:1600
+      scheduleOudVoice({
+        name, frequency:246.94, start:t, duration:0.24,
+        gain:0.062, brightness:0.42, release:0.20,
+        filterFrequency:1500, noiseLevel:0.03,
+        pitchBloom:0.004, pitchSettle:0.060
       });
       break;
 
     case 'score':
-      scheduleToneVoice({
-        name, frequency:440, start:t, duration:0.13,
-        gain:0.13, type:'triangle', attack:0.005, release:0.09,
-        filterFrequency:2800
+      scheduleOudVoice({
+        name, frequency:293.66, start:t, duration:0.23,
+        gain:0.055, brightness:0.55, release:0.19,
+        filterFrequency:2200, noiseLevel:0.05
       });
-      scheduleToneVoice({
-        name, frequency:554.37, start:t + 0.055, duration:0.16,
-        gain:0.12, type:'sine', attack:0.005, release:0.11,
-        filterFrequency:3200
+      scheduleOudVoice({
+        name, frequency:369.99, start:t + 0.085, duration:0.25,
+        gain:0.052, brightness:0.58, release:0.20,
+        filterFrequency:2300, noiseLevel:0.04
       });
-      scheduleToneVoice({
-        name, frequency:659.25, start:t + 0.115, duration:0.22,
-        gain:0.10, type:'sine', attack:0.005, release:0.16,
-        filterFrequency:3600
+      scheduleOudVoice({
+        name, frequency:392, start:t + 0.17, duration:0.34,
+        gain:0.050, brightness:0.60, release:0.27,
+        filterFrequency:2400, noiseLevel:0.035
       });
       break;
 
     case 'tile-swap':
       scheduleNoiseVoice({
-        name, start:t, duration:0.055, gain:0.08,
-        highpass:1200, lowpass:4200
+        name, start:t, duration:0.048, gain:0.050,
+        highpass:500, lowpass:2200
       });
-      scheduleToneVoice({
-        name, frequency:330, start:t + 0.025, duration:0.15,
-        gain:0.12, type:'triangle', attack:0.004, release:0.11,
-        filterFrequency:2300
+      scheduleOudVoice({
+        name, frequency:392, start:t + 0.028, duration:0.18,
+        gain:0.052, brightness:0.50, release:0.15,
+        filterFrequency:2100, noiseLevel:0.03
+      });
+      scheduleOudVoice({
+        name, frequency:330, start:t + 0.09, duration:0.17,
+        gain:0.042, brightness:0.46, release:0.14,
+        filterFrequency:1900, noiseLevel:0.02
       });
       break;
 
     case 'pass':
-      scheduleToneVoice({
-        name, frequency:220, start:t, duration:0.15,
-        gain:0.12, type:'sine', attack:0.004, release:0.11,
-        filterFrequency:1500
+      scheduleOudVoice({
+        name, frequency:220, start:t, duration:0.28,
+        gain:0.050, brightness:0.38, release:0.23,
+        filterFrequency:1400, noiseLevel:0.02
       });
       break;
 
     case 'undo':
-      scheduleToneVoice({
-        name, frequency:392, start:t, duration:0.12,
-        gain:0.12, type:'triangle', attack:0.004, release:0.09,
-        filterFrequency:2500
+      scheduleOudVoice({
+        name, frequency:392, start:t, duration:0.18,
+        gain:0.050, brightness:0.50, release:0.14,
+        filterFrequency:2100, noiseLevel:0.04
       });
-      scheduleToneVoice({
-        name, frequency:293.66, start:t + 0.065, duration:0.17,
-        gain:0.10, type:'sine', attack:0.004, release:0.13,
-        filterFrequency:2100
+      scheduleOudVoice({
+        name, frequency:293.66, start:t + 0.085, duration:0.28,
+        gain:0.048, brightness:0.48, release:0.22,
+        filterFrequency:1900, noiseLevel:0.025
       });
       break;
 
     case 'game-end':
-      // A calm Hijaz-colored resolution rather than separate win/lose cues.
-      scheduleToneVoice({
-        name, frequency:293.66, start:t, duration:0.24,
-        gain:0.12, type:'triangle', attack:0.006, release:0.16,
-        filterFrequency:2600
-      });
-      scheduleToneVoice({
-        name, frequency:311.13, start:t + 0.09, duration:0.24,
-        gain:0.105, type:'sine', attack:0.006, release:0.17,
-        filterFrequency:2800
-      });
-      scheduleToneVoice({
-        name, frequency:369.99, start:t + 0.18, duration:0.30,
-        gain:0.095, type:'triangle', attack:0.006, release:0.22,
-        filterFrequency:3000
-      });
-      scheduleToneVoice({
-        name, frequency:293.66, start:t + 0.29, duration:0.42,
-        gain:0.11, type:'sine', attack:0.008, release:0.30,
-        filterFrequency:3000
+      // Quiet Hijaz cadence: A -> G -> F# -> Eb -> D.
+      [
+        [440, 0.00, 0.050, 0.24],
+        [392, 0.15, 0.048, 0.25],
+        [369.99, 0.29, 0.046, 0.27],
+        [311.13, 0.43, 0.044, 0.29],
+        [293.66, 0.59, 0.060, 0.64]
+      ].forEach(([frequency, offset, gain, duration]) => {
+        scheduleOudVoice({
+          name, frequency, start:t + offset, duration,
+          gain, brightness:0.48, release:Math.min(0.52, duration * 0.82),
+          filterFrequency:2200, noiseLevel:0.03
+        });
       });
       break;
   }
 }
 
 const MELODY_A = Object.freeze([
-  0, 1, 2, 3,
-  4, 3, 2, null,
-  0, 4, 5, 4,
-  2, 1, 0, null
+  0, null, 2, 1,
+  null, 3, 2, null,
+  0, null, 4, 3,
+  2, 1, null, 0
 ]);
 
 const MELODY_B = Object.freeze([
-  0, 1, 2, 4,
-  3, 2, 1, null,
-  0, 4, 6, 5,
-  4, 2, 1, 0
+  0, 1, null, 3,
+  4, 3, 2, null,
+  0, null, 5, 4,
+  2, null, 1, 0
 ]);
 
 const MELODY_C = Object.freeze([
-  0, 1, 2, 5,
-  4, 3, 2, null,
-  0, 2, 4, 6,
-  5, 4, 2, null
+  0, null, 1, 2,
+  3, null, 4, 3,
+  0, 2, null, 5,
+  4, null, 2, 0
 ]);
 
 const MELODY_D = Object.freeze([
-  0, 1, 2, 3,
-  4, 6, 5, null,
-  4, 3, 2, 1,
-  0, null, 2, 0
+  0, 1, 2, null,
+  4, 3, null, 2,
+  0, null, 4, 5,
+  4, 3, 1, null
 ]);
 
 function midiLike(degree, octave = 0) {
@@ -614,231 +737,55 @@ function midiLike(degree, octave = 0) {
   return HIJAZ[index] * Math.pow(2, octave);
 }
 
-function scheduleMelody(stepTime, degree, accent = 1) {
+function scheduleMelody(stepTime, degree, accent = 1, ornament = false) {
   const frequency = midiLike(degree, 0);
   if (!frequency) return;
 
-  const osc = audioContext.createOscillator();
-  const harmonic = audioContext.createOscillator();
-  const filter = audioContext.createBiquadFilter();
-  const envelope = audioContext.createGain();
-
-  const duration = 0.19;
-  const end = stepTime + duration;
-  const peak = 0.075 * accent;
-
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(frequency, stepTime);
-
-  harmonic.type = 'sine';
-  harmonic.frequency.setValueAtTime(frequency * 2, stepTime);
-
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(1850, stepTime);
-  filter.Q.setValueAtTime(0.35, stepTime);
-
-  envelope.gain.setValueAtTime(0.0001, stepTime);
-  envelope.gain.exponentialRampToValueAtTime(peak, stepTime + 0.012);
-  envelope.gain.setValueAtTime(peak * 0.82, Math.max(stepTime + 0.014, end - 0.07));
-  envelope.gain.exponentialRampToValueAtTime(0.0001, end);
-
-  osc.connect(filter);
-  harmonic.connect(filter);
-  filter.connect(envelope);
-  envelope.connect(musicGain);
-
-  const voice = makeVoice('bgm-melody', () => {
-    const now = audioContext.currentTime;
-    envelope.gain.cancelScheduledValues(now);
-    envelope.gain.setTargetAtTime(0.0001, now, 0.016);
-    safeStopSource(osc);
-    safeStopSource(harmonic);
-  });
-
-  const cleanup = () => releaseVoice(voice);
-  osc.onended = cleanup;
-  harmonic.onended = cleanup;
-
-  try {
-    osc.start(stepTime);
-    harmonic.start(stepTime);
-    osc.stop(end + 0.025);
-    harmonic.stop(end + 0.025);
-  } catch {
-    releaseVoice(voice);
+  if (ornament && degree === 2) {
+    scheduleOudVoice({
+      name:'bgm-ornament', frequency:HIJAZ[1], start:stepTime,
+      duration:0.12, gain:0.023, bus:'music', brightness:0.58,
+      release:0.09, filterFrequency:2400, noiseLevel:0.012
+    });
+    scheduleOudVoice({
+      name:'bgm-melody', frequency, start:stepTime + 0.045,
+      duration:0.34, gain:0.082 * accent, bus:'music', brightness:0.74,
+      release:0.27, filterFrequency:2900, noiseLevel:0.012
+    });
+    return;
   }
+
+  scheduleOudVoice({
+    name:'bgm-melody', frequency, start:stepTime,
+    duration:0.34, gain:0.082 * accent, bus:'music', brightness:0.74,
+    release:0.27, filterFrequency:2900, noiseLevel:0.012
+  });
 }
 
-function scheduleBass(stepTime, rootDegree, duration) {
-  const root = midiLike(rootDegree, -1);
-  const fifth = midiLike(4, -1);
-  if (!root || !fifth) return;
+function scheduleBass(stepTime, degree, duration) {
+  const frequency = midiLike(degree, -1);
+  if (!frequency) return;
 
-  const end = stepTime + duration;
-  const filter = audioContext.createBiquadFilter();
-  const envelope = audioContext.createGain();
-  const oscA = audioContext.createOscillator();
-  const oscB = audioContext.createOscillator();
-
-  oscA.type = 'sine';
-  oscB.type = 'triangle';
-  oscA.frequency.setValueAtTime(root, stepTime);
-  oscB.frequency.setValueAtTime(fifth, stepTime);
-
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(620, stepTime);
-  filter.Q.setValueAtTime(0.45, stepTime);
-
-  envelope.gain.setValueAtTime(0.0001, stepTime);
-  envelope.gain.exponentialRampToValueAtTime(0.034, stepTime + 0.025);
-  envelope.gain.setValueAtTime(0.025, Math.max(stepTime + 0.03, end - 0.12));
-  envelope.gain.exponentialRampToValueAtTime(0.0001, end);
-
-  oscA.connect(filter);
-  oscB.connect(filter);
-  filter.connect(envelope);
-  envelope.connect(musicGain);
-
-  const voice = makeVoice('bgm-bass', () => {
-    const now = audioContext.currentTime;
-    envelope.gain.cancelScheduledValues(now);
-    envelope.gain.setTargetAtTime(0.0001, now, 0.02);
-    safeStopSource(oscA);
-    safeStopSource(oscB);
+  scheduleOudVoice({
+    name:'bgm-bass', frequency, start:stepTime, duration,
+    gain:0.028, bus:'music', brightness:0.28, release:Math.min(0.48, duration * 0.72),
+    filterFrequency:1250, noiseLevel:0.003, pitchBloom:0.004, pitchSettle:0.06
   });
-
-  const cleanup = () => releaseVoice(voice);
-  oscA.onended = cleanup;
-  oscB.onended = cleanup;
-
-  try {
-    oscA.start(stepTime);
-    oscB.start(stepTime);
-    oscA.stop(end + 0.025);
-    oscB.stop(end + 0.025);
-  } catch {
-    releaseVoice(voice);
-  }
 }
 
 function scheduleDrone(stepTime, duration) {
-  const root = midiLike(0, -1);
-  const fourth = midiLike(3, -1);
-  if (!root || !fourth) return;
-
-  const end = stepTime + duration;
-  const envelope = audioContext.createGain();
-  const filter = audioContext.createBiquadFilter();
-  const rootOsc = audioContext.createOscillator();
-  const fourthOsc = audioContext.createOscillator();
-
-  rootOsc.type = 'triangle';
-  fourthOsc.type = 'sine';
-  rootOsc.frequency.setValueAtTime(root, stepTime);
-  fourthOsc.frequency.setValueAtTime(fourth, stepTime);
-
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(900, stepTime);
-  filter.Q.setValueAtTime(0.3, stepTime);
-
-  envelope.gain.setValueAtTime(0.0001, stepTime);
-  envelope.gain.linearRampToValueAtTime(0.018, stepTime + 0.18);
-  envelope.gain.setValueAtTime(0.015, Math.max(stepTime + 0.2, end - 0.22));
-  envelope.gain.linearRampToValueAtTime(0.0001, end);
-
-  rootOsc.connect(filter);
-  fourthOsc.connect(filter);
-  filter.connect(envelope);
-  envelope.connect(musicGain);
-
-  const voice = makeVoice('bgm-drone', () => {
-    const now = audioContext.currentTime;
-    envelope.gain.cancelScheduledValues(now);
-    envelope.gain.setTargetAtTime(0.0001, now, 0.05);
-    safeStopSource(rootOsc);
-    safeStopSource(fourthOsc);
+  scheduleOudVoice({
+    name:'bgm-drone', frequency:midiLike(0,-1), start:stepTime, duration,
+    gain:0.013, bus:'music', brightness:0.20, attack:0.08,
+    release:Math.min(0.55, duration * 0.24), filterFrequency:850,
+    noiseLevel:0, pitchBloom:0.001, pitchSettle:0.12
   });
-
-  const cleanup = () => releaseVoice(voice);
-  rootOsc.onended = cleanup;
-  fourthOsc.onended = cleanup;
-
-  try {
-    rootOsc.start(stepTime);
-    fourthOsc.start(stepTime);
-    rootOsc.stop(end + 0.03);
-    fourthOsc.stop(end + 0.03);
-  } catch {
-    releaseVoice(voice);
-  }
-}
-
-function schedulePercussion(stepTime, step) {
-  const isDownbeat = step % MUSIC.stepsPerBeat === 0;
-  const isBackbeat = step % MUSIC.stepsPerBeat === 8;
-
-  if (isDownbeat) {
-    const osc = audioContext.createOscillator();
-    const envelope = audioContext.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(94, stepTime);
-    envelope.gain.setValueAtTime(0.0001, stepTime);
-    envelope.gain.exponentialRampToValueAtTime(0.022, stepTime + 0.005);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.10);
-    osc.connect(envelope);
-    envelope.connect(musicGain);
-
-    const voice = makeVoice('bgm-percussion', () => {
-      envelope.gain.setTargetAtTime(0.0001, audioContext.currentTime, 0.01);
-      safeStopSource(osc);
-    });
-    osc.onended = () => releaseVoice(voice);
-
-    try {
-      osc.start(stepTime);
-      osc.stop(stepTime + 0.13);
-    } catch {
-      releaseVoice(voice);
-    }
-  } else if (isBackbeat) {
-    scheduleNoiseVoiceBGM(stepTime, 0.022, 0.055);
-  }
-}
-
-function scheduleNoiseVoiceBGM(start, gain, duration) {
-  if (!noiseBuffer) return;
-
-  const source = audioContext.createBufferSource();
-  const high = audioContext.createBiquadFilter();
-  const envelope = audioContext.createGain();
-  const end = start + duration;
-
-  source.buffer = noiseBuffer;
-  high.type = 'bandpass';
-  high.frequency.setValueAtTime(2400, start);
-  high.Q.setValueAtTime(0.6, start);
-
-  envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(gain, start + 0.003);
-  envelope.gain.exponentialRampToValueAtTime(0.0001, end);
-
-  source.connect(high);
-  high.connect(envelope);
-  envelope.connect(musicGain);
-
-  const voice = makeVoice('bgm-percussion', () => {
-    envelope.gain.setTargetAtTime(0.0001, audioContext.currentTime, 0.008);
-    safeStopSource(source);
+  scheduleOudVoice({
+    name:'bgm-drone', frequency:midiLike(4,-1), start:stepTime + 0.02, duration:duration - 0.02,
+    gain:0.010, bus:'music', brightness:0.18, attack:0.10,
+    release:Math.min(0.55, duration * 0.24), filterFrequency:780,
+    noiseLevel:0, pitchBloom:0.001, pitchSettle:0.12
   });
-
-  source.onended = () => releaseVoice(voice);
-
-  try {
-    source.start(start);
-    source.stop(end + 0.015);
-  } catch {
-    releaseVoice(voice);
-  }
 }
 
 function scheduleMusicStep(stepTime, step) {
@@ -851,20 +798,21 @@ function scheduleMusicStep(stepTime, step) {
   const degree = pattern[step % MUSIC.stepsPerBar];
 
   if (degree != null) {
-    const accent = step % MUSIC.stepsPerBeat === 0 ? 1.1 : 0.9;
-    scheduleMelody(stepTime, degree, accent);
+    const accent = step % MUSIC.stepsPerBeat === 0 ? 1.04 : 0.82;
+    const ornament = accent > 1 && (degree === 2 || degree === 4);
+    scheduleMelody(stepTime, degree, accent, ornament);
   }
 
   if (step % MUSIC.stepsPerBeat === 0) {
     const beat = Math.floor(step / MUSIC.stepsPerBeat) % 4;
-    scheduleBass(stepTime, beat === 2 ? 4 : 0, 0.48);
+    if (beat === 0 || beat === 2) {
+      scheduleBass(stepTime, beat === 2 ? 4 : 0, 0.62);
+    }
   }
 
   if (step % MUSIC.stepsPerBar === 0) {
-    scheduleDrone(stepTime, 2.36);
+    scheduleDrone(stepTime, 3.15);
   }
-
-  schedulePercussion(stepTime, step);
 }
 
 function schedulerTick() {
