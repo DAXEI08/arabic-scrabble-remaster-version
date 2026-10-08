@@ -124,7 +124,7 @@ button,input,textarea,select{font-family:inherit}
 @media (max-width:719px) and (orientation:portrait){
   header{
     min-height:56px;
-    padding-inline:96px;
+    padding-inline:0;
     justify-content:center;
   }
   h1{
@@ -143,7 +143,7 @@ button,input,textarea,select{font-family:inherit}
 
 /* Extra-small phones: tighter header spacing while preserving a comfortable audio hit area. */
 @media (max-width:360px) and (orientation:portrait){
-  header{padding-inline:88px;min-height:52px}
+  header{padding-inline:0;min-height:52px}
   h1{font-size:clamp(.92rem,5.4vw,1.15rem);letter-spacing:.04em}
   .audioDock{grid-template-columns:repeat(2,minmax(0,1fr))}
   .audioDock .btn{min-height:38px;font-size:1rem}
