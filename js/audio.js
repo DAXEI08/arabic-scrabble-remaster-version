@@ -1,9 +1,13 @@
-// Audio engine for Arabic Scrabble.
-// Keeps the game's custom MP3 assets and adds persistent, independent music/SFX controls.
+// Isolated audio layer for Arabic Scrabble.
+// HTMLAudio-based mixer with shared source pools, session-safe lifecycle,
+// mobile/autoplay recovery, logical music/SFX buses, ducking, priority,
+// and defensive resource/error handling.
 //
-// Existing assets are optional. Missing files are ignored without breaking gameplay.
+// Public API is kept compatible with the existing game integration.
+// No gameplay state or non-audio logic is imported here.
 
-const BGM_SRC = 'assets/audio/bgm.mp3';
+const AUDIO_ROOT = 'assets/audio/';
+const BGM_SRC = AUDIO_ROOT + 'bgm.mp3';
 const STORAGE_KEY = 'scrabble.audio.v2';
 
 const DEFAULT_PREFS = Object.freeze({
@@ -14,31 +18,44 @@ const DEFAULT_PREFS = Object.freeze({
   sfxVolume: 0.70
 });
 
-const SFX = {
-  'tile-select': {src:'assets/audio/tile-select.mp3', volume:.20, pool:2, cooldown:70},
-  'tile-place':  {src:'assets/audio/tile-place.mp3',  volume:.45, pool:3, cooldown:50},
-  'tile-cancel': {src:'assets/audio/tile-cancel.mp3', volume:.25, pool:2, cooldown:80},
-  'word-submit': {src:'assets/audio/word-submit.mp3', volume:.34, pool:2, cooldown:100},
-  // These actions intentionally reuse bundled clips; no speculative 404 requests.
-  'invalid':     {src:'assets/audio/tile-cancel.mp3', volume:.30, pool:2, cooldown:120},
-  'score':       {src:'assets/audio/word-submit.mp3', volume:.42, pool:2, cooldown:100},
-  'tile-swap':   {src:'assets/audio/tile-place.mp3',  volume:.38, pool:2, cooldown:100},
-  'pass':        {src:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
-  'undo':        {src:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
-  'game-end':    {src:'assets/audio/game-end.mp3',    volume:.48, pool:2, cooldown:200},
-  // UI-only feedback uses the existing tile-select MP3, so no new asset is required.
-  'button-click': {src:'assets/audio/tile-select.mp3', volume:.14, pool:2, cooldown:75}
-};
+// Logical audio events. Events that intentionally reuse an asset share
+// the same underlying media pool, reducing duplicated decoders/buffers.
+const SFX = Object.freeze({
+  'tile-select':  {src:AUDIO_ROOT + 'tile-select.mp3', volume:.20, pool:2, cooldown:70,  priority:20},
+  'tile-place':   {src:AUDIO_ROOT + 'tile-place.mp3',  volume:.45, pool:3, cooldown:50,  priority:40},
+  'tile-cancel':  {src:AUDIO_ROOT + 'tile-cancel.mp3', volume:.25, pool:2, cooldown:80,  priority:30},
+  'word-submit':  {src:AUDIO_ROOT + 'word-submit.mp3', volume:.34, pool:2, cooldown:100, priority:50},
+  'invalid':      {src:AUDIO_ROOT + 'tile-cancel.mp3', volume:.30, pool:2, cooldown:120, priority:25},
+  'score':        {src:AUDIO_ROOT + 'word-submit.mp3', volume:.42, pool:2, cooldown:100, priority:45},
+  'tile-swap':    {src:AUDIO_ROOT + 'tile-place.mp3',  volume:.38, pool:3, cooldown:100, priority:35},
+  'pass':         {src:AUDIO_ROOT + 'tile-cancel.mp3', volume:.27, pool:2, cooldown:120, priority:25},
+  'undo':         {src:AUDIO_ROOT + 'tile-cancel.mp3', volume:.27, pool:2, cooldown:120, priority:30},
+  'game-end':     {src:AUDIO_ROOT + 'game-end.mp3',    volume:.48, pool:2, cooldown:200, priority:100},
+  'button-click': {src:AUDIO_ROOT + 'tile-select.mp3', volume:.14, pool:2, cooldown:75,  priority:15}
+});
+
+const SOURCE_POOL_SIZES = (() => {
+  const sizes = new Map();
+  for (const cfg of Object.values(SFX)) {
+    sizes.set(cfg.src, Math.max(sizes.get(cfg.src) || 0, cfg.pool));
+  }
+  return sizes;
+})();
 
 let bgm = null;
 let active = false;
 let initialized = false;
 let retryBound = false;
 let prefs = {...DEFAULT_PREFS};
+
+let duckDepth = 0;
 let ducked = false;
 let fadeFrame = 0;
+let sessionId = 0;
+let pausedByVisibility = false;
 
-const clips = new Map();
+const sourcePools = new Map(); // src -> Audio[]; one pool per unique asset
+const voiceMeta = new WeakMap(); // Audio -> {eventName, priority, startedAt}
 const lastPlayed = new Map();
 
 const clamp01 = (value, fallback) => {
@@ -46,7 +63,8 @@ const clamp01 = (value, fallback) => {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : fallback;
 };
 
-const bool = (value, fallback) => typeof value === 'boolean' ? value : fallback;
+const bool = (value, fallback) =>
+  typeof value === 'boolean' ? value : fallback;
 
 function loadPrefs() {
   try {
@@ -64,8 +82,11 @@ function loadPrefs() {
 }
 
 function savePrefs() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); }
-  catch { /* private mode / quota: preferences simply won't persist */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Storage can be unavailable in private/restricted environments.
+  }
 }
 
 function allowedMusic() {
@@ -77,22 +98,30 @@ function allowedSfx() {
 }
 
 function musicTarget() {
-  return allowedMusic() ? prefs.musicVolume * (ducked ? 0.18 : 1) : 0;
+  if (!allowedMusic()) return 0;
+  return clamp01(prefs.musicVolume * (ducked ? 0.18 : 1), 0);
+}
+
+function sfxTarget(name) {
+  const cfg = SFX[name];
+  return cfg ? clamp01(cfg.volume * prefs.sfxVolume, 0) : 0;
 }
 
 function cancelFade() {
-  if (fadeFrame) {
-    cancelAnimationFrame(fadeFrame);
-    fadeFrame = 0;
-  }
+  if (!fadeFrame) return;
+  cancelAnimationFrame(fadeFrame);
+  fadeFrame = 0;
 }
 
 function fadeBGM(target, duration = 420, after = null) {
-  if (!bgm) { after?.(); return; }
+  if (!bgm) {
+    after?.();
+    return;
+  }
 
   cancelFade();
 
-  const start = bgm.volume;
+  const start = clamp01(bgm.volume, 0);
   const end = clamp01(target, 0);
 
   if (duration <= 0 || Math.abs(end - start) < 0.001) {
@@ -102,31 +131,113 @@ function fadeBGM(target, duration = 420, after = null) {
   }
 
   const started = performance.now();
+  const token = sessionId;
+
   const step = now => {
     fadeFrame = 0;
-    if (!bgm) return;
 
-    const progress = Math.min(1, (now - started) / duration);
+    if (!bgm || token !== sessionId) return;
+
+    const progress = Math.min(1, Math.max(0, (now - started) / duration));
     const eased = 1 - Math.pow(1 - progress, 3);
     bgm.volume = start + (end - start) * eased;
 
     if (progress < 1) {
       fadeFrame = requestAnimationFrame(step);
-    } else {
-      after?.();
+      return;
     }
+
+    after?.();
   };
 
   fadeFrame = requestAnimationFrame(step);
 }
 
+function stopVoice(voice) {
+  try {
+    voice.pause();
+    voice.currentTime = 0;
+    voice.volume = 0;
+  } catch {
+    // A broken media element must never affect gameplay.
+  }
+  voiceMeta.delete(voice);
+}
+
 function stopAllSFX() {
-  for (const pool of clips.values()) {
-    for (const clip of pool) {
-      try {
-        clip.pause();
-        clip.currentTime = 0;
-      } catch { /* broken media element */ }
+  for (const pool of sourcePools.values()) {
+    for (const voice of pool) stopVoice(voice);
+  }
+}
+
+function stopSFX(name) {
+  if (!name) return;
+  for (const pool of sourcePools.values()) {
+    for (const voice of pool) {
+      const meta = voiceMeta.get(voice);
+      if (meta?.eventName === name) stopVoice(voice);
+    }
+  }
+}
+
+function makeVoice(src) {
+  const voice = new Audio(src);
+  voice.preload = 'auto';
+  voice.volume = 0;
+  voice.addEventListener('error', () => {
+    voice.dataset.broken = '1';
+    voiceMeta.delete(voice);
+  });
+  return voice;
+}
+
+function getSourcePool(src) {
+  let pool = sourcePools.get(src);
+  if (pool) return pool;
+
+  const size = SOURCE_POOL_SIZES.get(src) || 1;
+  pool = Array.from({length:size}, () => makeVoice(src));
+  sourcePools.set(src, pool);
+  return pool;
+}
+
+function isUsableVoice(voice) {
+  return voice.dataset.broken !== '1';
+}
+
+function isBusyVoice(voice) {
+  return !voice.paused && !voice.ended;
+}
+
+function pickVoice(pool, priority) {
+  const usable = pool.filter(isUsableVoice);
+  if (!usable.length) return null;
+
+  const idle = usable.find(voice => !isBusyVoice(voice));
+  if (idle) return idle;
+
+  // Never steal a higher-priority sound for a lower-priority event.
+  const stealable = usable.filter(voice => {
+    const meta = voiceMeta.get(voice);
+    return !meta || meta.priority <= priority;
+  });
+
+  if (!stealable.length) return null;
+
+  return stealable.reduce((oldest, voice) => {
+    const a = voiceMeta.get(oldest)?.startedAt ?? -Infinity;
+    const b = voiceMeta.get(voice)?.startedAt ?? -Infinity;
+    return b < a ? voice : oldest;
+  });
+}
+
+function updateVoiceVolumes() {
+  for (const pool of sourcePools.values()) {
+    for (const voice of pool) {
+      const meta = voiceMeta.get(voice);
+      if (meta?.eventName) {
+        voice.volume = sfxTarget(meta.eventName);
+      }
     }
   }
 }
@@ -178,14 +289,69 @@ function updateSettingsUI() {
   if (sfxValue) sfxValue.textContent = Math.round(prefs.sfxVolume * 100) + '%';
 }
 
+function safePlay(voice) {
+  try {
+    const promise = voice.play();
+    if (promise && typeof promise.catch === 'function') {
+      return promise.catch(() => false);
+    }
+    return Promise.resolve(true);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
 function tryPlayBGM() {
   if (!bgm || !active || !allowedMusic() || document.hidden) return;
 
   const promise = bgm.play();
   if (promise && typeof promise.catch === 'function') {
     promise.catch(() => {
-      // Autoplay restrictions are handled by the retry listeners.
+      // Autoplay restrictions are retried on real user interaction.
     });
+  }
+}
+
+function retryPlayback() {
+  if (bgm && active && allowedMusic() && bgm.paused && !document.hidden) {
+    tryPlayBGM();
+  }
+}
+
+function handleVisibilityChange() {
+  if (!bgm || !active) return;
+
+  if (document.hidden) {
+    pausedByVisibility = !bgm.paused;
+    cancelFade();
+    if (pausedByVisibility) bgm.pause();
+    return;
+  }
+
+  if (pausedByVisibility) {
+    pausedByVisibility = false;
+    if (allowedMusic()) {
+      tryPlayBGM();
+      fadeBGM(musicTarget(), 260);
+    }
+  }
+}
+
+function handlePageHide() {
+  if (!bgm || !active) return;
+  pausedByVisibility = !bgm.paused;
+  cancelFade();
+  if (pausedByVisibility) bgm.pause();
+}
+
+function handlePageShow() {
+  if (!bgm || !active) return;
+  if (!document.hidden && pausedByVisibility) {
+    pausedByVisibility = false;
+    if (allowedMusic()) {
+      tryPlayBGM();
+      fadeBGM(musicTarget(), 260);
+    }
   }
 }
 
@@ -193,55 +359,31 @@ function bindPlaybackRetry() {
   if (retryBound) return;
   retryBound = true;
 
-  const retry = () => {
-    if (bgm && active && allowedMusic() && bgm.paused) tryPlayBGM();
-  };
-
-  document.addEventListener('pointerdown', retry, {passive:true});
-  document.addEventListener('keydown', retry);
-  document.addEventListener('touchstart', retry, {passive:true});
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) retry();
-  });
+  document.addEventListener('pointerdown', retryPlayback, {passive:true});
+  document.addEventListener('keydown', retryPlayback);
+  document.addEventListener('touchstart', retryPlayback, {passive:true});
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('pagehide', handlePageHide);
+  window.addEventListener('pageshow', handlePageShow);
 }
 
-function makePool(name, cfg) {
-  const pool = [];
-
-  for (let i = 0; i < cfg.pool; i++) {
-    const clip = new Audio(cfg.src);
-    clip.preload = 'auto';
-    clip.volume = cfg.volume * prefs.sfxVolume;
-    clip.addEventListener('error', () => {
-      if (cfg.fallback && clip.dataset.fallbackTried !== '1') {
-        clip.dataset.fallbackTried = '1';
-        clip.dataset.broken = '';
-        try {
-          clip.src = cfg.fallback;
-          clip.load();
-        } catch {
-          clip.dataset.broken = '1';
-        }
-      } else {
-        clip.dataset.broken = '1';
-      }
-    });
-    pool.push(clip);
+function bindAudioLifecycleAdapters() {
+  // Final-score/new-game button may be used before the next duration is chosen.
+  // Stop only the end-game stinger here; the normal BGM session is left untouched.
+  const newGameButton = document.getElementById('bNew');
+  if (newGameButton) {
+    newGameButton.addEventListener('click', () => stopSFX('game-end'), {capture:true});
   }
 
-  return pool;
-}
-
-function getPool(name) {
-  let pool = clips.get(name);
-  if (pool) return pool;
-
-  const cfg = SFX[name];
-  if (!cfg) return null;
-
-  pool = makePool(name, cfg);
-  clips.set(name, pool);
-  return pool;
+  // ui.js opens #dlg for confirmation dialogs and ducks music, but its close
+  // listener does not release that audio state. Reconcile exactly one duck
+  // layer here without touching the UI/game modules.
+  const confirmDialog = document.getElementById('dlg');
+  if (confirmDialog) {
+    confirmDialog.addEventListener('close', () => {
+      setMusicDucked(false);
+    });
+  }
 }
 
 function bindSettingsControls() {
@@ -274,11 +416,15 @@ function bindSettingsControls() {
   }
 
   if (musicRange) {
-    musicRange.oninput = e => setVolume('music', Number(e.target.value) / 100);
+    musicRange.oninput = event => {
+      setVolume('music', Number(event.target.value) / 100);
+    };
   }
 
   if (sfxRange) {
-    sfxRange.oninput = e => setVolume('sfx', Number(e.target.value) / 100);
+    sfxRange.oninput = event => {
+      setVolume('sfx', Number(event.target.value) / 100);
+    };
   }
 
   if (dialog) {
@@ -289,35 +435,50 @@ function bindSettingsControls() {
   }
 }
 
-export function prepareForNewGame() {
-  cancelFade();
+function resetDuckState() {
+  duckDepth = 0;
   ducked = false;
+}
+
+export function prepareForNewGame() {
+  sessionId++;
+  cancelFade();
+  resetDuckState();
   stopAllSFX();
+  lastPlayed.clear();
 
   active = false;
+  pausedByVisibility = false;
+
   if (bgm) {
-    bgm.pause();
-    try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
-    bgm.volume = 0;
+    try {
+      bgm.pause();
+      bgm.currentTime = 0;
+      bgm.volume = 0;
+    } catch {
+      // Media may not be seekable yet.
+    }
   }
 }
 
 export function startNewGameAudio() {
+  sessionId++;
+  cancelFade();
   stopAllSFX();
   lastPlayed.clear();
-  ducked = false;
-
-  if (!bgm) {
-    active = true;
-    return;
-  }
-
+  resetDuckState();
   active = true;
-  cancelFade();
+  pausedByVisibility = false;
 
-  bgm.pause();
-  try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
-  bgm.volume = 0;
+  if (!bgm) return;
+
+  try {
+    bgm.pause();
+    bgm.currentTime = 0;
+    bgm.volume = 0;
+  } catch {
+    // Media may not be seekable yet.
+  }
 
   if (allowedMusic()) {
     tryPlayBGM();
@@ -338,12 +499,16 @@ export function initAudio() {
     bgm.preload = 'none';
     bgm.volume = 0;
     bgm.setAttribute('aria-hidden', 'true');
+    bgm.addEventListener('error', () => {
+      bgm.dataset.broken = '1';
+    });
   }
 
   const soundButton = document.getElementById('bSound');
   if (soundButton) soundButton.onclick = toggleMute;
 
   bindSettingsControls();
+  bindAudioLifecycleAdapters();
   updateSoundButton();
   updateSettingsUI();
   bindPlaybackRetry();
@@ -358,10 +523,15 @@ export function playBGM(reset = false) {
   active = true;
 
   if (reset) {
+    sessionId++;
     cancelFade();
-    bgm.pause();
-    try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
-    bgm.volume = 0;
+    try {
+      bgm.pause();
+      bgm.currentTime = 0;
+      bgm.volume = 0;
+    } catch {
+      // Media may not be seekable yet.
+    }
   }
 
   tryPlayBGM();
@@ -369,32 +539,36 @@ export function playBGM(reset = false) {
 }
 
 export function stopBGM() {
+  sessionId++;
   active = false;
+  pausedByVisibility = false;
+  cancelFade();
+
   if (!bgm) return;
 
-  fadeBGM(0, 520, () => {
-    if (active || !bgm) return;
+  try {
     bgm.pause();
-    try { bgm.currentTime = 0; } catch { /* media may not be seekable yet */ }
+    bgm.currentTime = 0;
     bgm.volume = 0;
-  });
+  } catch {
+    // Media may not be seekable yet.
+  }
 }
 
 export function toggleMute() {
   prefs.muted = !prefs.muted;
   savePrefs();
 
-  if (prefs.muted) stopAllSFX();
-
-  if (bgm) {
-    if (allowedMusic() && active) {
-      tryPlayBGM();
-      fadeBGM(musicTarget(), 360);
-    } else {
-      fadeBGM(0, 260, () => {
-        if (!allowedMusic() || !active) bgm.pause();
-      });
+  if (prefs.muted) {
+    stopAllSFX();
+    if (bgm) {
+      cancelFade();
+      bgm.pause();
+      bgm.volume = 0;
     }
+  } else if (bgm && active) {
+    tryPlayBGM();
+    fadeBGM(musicTarget(), 360);
   }
 
   updateSoundButton();
@@ -411,7 +585,9 @@ export function setMusicEnabled(on) {
       fadeBGM(musicTarget(), 360);
     } else if (!prefs.music || prefs.muted) {
       fadeBGM(0, 260, () => {
-        if (!allowedMusic() || !active) bgm.pause();
+        if (!allowedMusic() || !active) {
+          try { bgm.pause(); } catch {}
+        }
       });
     }
   }
@@ -423,7 +599,6 @@ export function setMusicEnabled(on) {
 export function setSfxEnabled(on) {
   prefs.sfx = Boolean(on);
   savePrefs();
-
   if (!prefs.sfx) stopAllSFX();
 
   updateSoundButton();
@@ -442,13 +617,10 @@ export function setVolume(kind, value) {
 
   if (kind === 'music') {
     prefs.musicVolume = volume;
-    if (bgm) fadeBGM(musicTarget(), 160);
+    if (bgm) fadeBGM(musicTarget(), 120);
   } else {
     prefs.sfxVolume = volume;
-    for (const [name, pool] of clips) {
-      const cfg = SFX[name];
-      for (const clip of pool) clip.volume = cfg.volume * volume;
-    }
+    updateVoiceVolumes();
   }
 
   savePrefs();
@@ -456,8 +628,19 @@ export function setVolume(kind, value) {
 }
 
 export function setMusicDucked(on) {
-  ducked = Boolean(on);
-  if (bgm && active && allowedMusic()) fadeBGM(musicTarget(), ducked ? 180 : 360);
+  if (on) {
+    duckDepth++;
+  } else {
+    duckDepth = Math.max(0, duckDepth - 1);
+  }
+
+  const next = duckDepth > 0;
+  if (ducked === next) return;
+
+  ducked = next;
+  if (bgm && active && allowedMusic()) {
+    fadeBGM(musicTarget(), ducked ? 180 : 360);
+  }
 }
 
 export function getAudioSettings() {
@@ -466,6 +649,11 @@ export function getAudioSettings() {
 
 export function isMuted() {
   return prefs.muted;
+}
+
+export function stopAllSFXNow() {
+  stopAllSFX();
+  lastPlayed.clear();
 }
 
 export function playSFX(name) {
@@ -477,23 +665,33 @@ export function playSFX(name) {
   const now = performance.now();
   const last = lastPlayed.get(name) ?? -Infinity;
   if (now - last < cfg.cooldown) return;
-  lastPlayed.set(name, now);
 
-  const pool = getPool(name);
-  if (!pool) return;
+  const pool = getSourcePool(cfg.src);
+  const voice = pickVoice(pool, cfg.priority);
+  if (!voice) return;
 
-  let clip = pool.find(a => a.paused || a.ended || a.dataset.broken === '1');
-  if (!clip) clip = pool[0];
-  if (clip.dataset.broken === '1') return;
+  const targetVolume = sfxTarget(name);
+  if (targetVolume <= 0) return;
 
-  try {
-    clip.currentTime = 0;
-    clip.volume = cfg.volume * prefs.sfxVolume;
-    const promise = clip.play();
-    if (promise && typeof promise.catch === 'function') {
-      promise.catch(() => {});
-    }
-  } catch {
-    // Audio must never affect gameplay.
-  }
+  // Stop a lower/equal-priority voice only when all pooled voices are busy.
+  stopVoice(voice);
+
+  voice.volume = targetVolume;
+  voiceMeta.set(voice, {
+    eventName: name,
+    priority: cfg.priority,
+    startedAt: now
+  });
+
+  const stamp = now;
+  lastPlayed.set(name, stamp);
+
+  const promise = safePlay(voice);
+  promise.then(ok => {
+    if (ok) return;
+    const current = voiceMeta.get(voice);
+    if (current?.eventName === name) voiceMeta.delete(voice);
+    if (lastPlayed.get(name) === stamp) lastPlayed.delete(name);
+    stopVoice(voice);
+  });
 }
