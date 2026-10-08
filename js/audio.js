@@ -19,13 +19,12 @@ const SFX = {
   'tile-place':  {src:'assets/audio/tile-place.mp3',  volume:.45, pool:3, cooldown:50},
   'tile-cancel': {src:'assets/audio/tile-cancel.mp3', volume:.25, pool:2, cooldown:80},
   'word-submit': {src:'assets/audio/word-submit.mp3', volume:.34, pool:2, cooldown:100},
-  // Several optional dedicated clips may be added later. Until then, fall back
-  // to the closest existing custom MP3 already bundled with the game.
-  'invalid':     {src:'assets/audio/invalid.mp3',     fallback:'assets/audio/tile-cancel.mp3', volume:.30, pool:2, cooldown:120},
-  'score':       {src:'assets/audio/score.mp3',       fallback:'assets/audio/word-submit.mp3', volume:.42, pool:2, cooldown:100},
-  'tile-swap':   {src:'assets/audio/tile-swap.mp3',   fallback:'assets/audio/tile-place.mp3', volume:.38, pool:2, cooldown:100},
-  'pass':        {src:'assets/audio/pass.mp3',        fallback:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
-  'undo':        {src:'assets/audio/undo.mp3',        fallback:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
+  // These actions intentionally reuse bundled clips; no speculative 404 requests.
+  'invalid':     {src:'assets/audio/tile-cancel.mp3', volume:.30, pool:2, cooldown:120},
+  'score':       {src:'assets/audio/word-submit.mp3', volume:.42, pool:2, cooldown:100},
+  'tile-swap':   {src:'assets/audio/tile-place.mp3',  volume:.38, pool:2, cooldown:100},
+  'pass':        {src:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
+  'undo':        {src:'assets/audio/tile-cancel.mp3', volume:.27, pool:2, cooldown:120},
   'game-end':    {src:'assets/audio/game-end.mp3',    volume:.48, pool:2, cooldown:200},
   // UI-only feedback uses the existing tile-select MP3, so no new asset is required.
   'button-click': {src:'assets/audio/tile-select.mp3', volume:.14, pool:2, cooldown:75}
@@ -35,7 +34,6 @@ let bgm = null;
 let active = false;
 let initialized = false;
 let retryBound = false;
-let muted = DEFAULT_PREFS.muted;
 let prefs = {...DEFAULT_PREFS};
 let ducked = false;
 let fadeFrame = 0;
@@ -332,13 +330,12 @@ export function initAudio() {
   initialized = true;
 
   prefs = loadPrefs();
-  muted = prefs.muted;
 
   bgm = document.getElementById('bgm');
   if (bgm) {
     bgm.src = BGM_SRC;
     bgm.loop = true;
-    bgm.preload = 'auto';
+    bgm.preload = 'none';
     bgm.volume = 0;
     bgm.setAttribute('aria-hidden', 'true');
   }
