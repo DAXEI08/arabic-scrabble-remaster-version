@@ -118,4 +118,12 @@ function bindDialogs() {
   });
 }
 
-export function initInput() { bindBoardInput(); bindControls(); bindDialogs(); }
+let initialized = false;
+
+export function initInput() {
+  if (initialized) return;
+  initialized = true;
+  bindBoardInput();
+  bindControls();
+  bindDialogs();
+}
